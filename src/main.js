@@ -63,18 +63,23 @@ function formatTime(ms) {
 // wasm과 모델 모두 public/에서 서빙한다. 영상은 브라우저 밖으로 나가지 않는다.
 // 폰·저사양 기기는 GPU 델리게이트가 없을 수 있으므로 CPU로 물러난다.
 let delegateUsed = 'GPU';
-async function createFaceLandmarker() {
-  const fileset = await FilesetResolver.forVisionTasks('/wasm');
-  const opts = (delegate) => ({
+let filesetPromise = null;
+
+async function createFaceLandmarkerOn(delegate) {
+  filesetPromise ??= FilesetResolver.forVisionTasks('/wasm');
+  return FaceLandmarker.createFromOptions(await filesetPromise, {
     baseOptions: { modelAssetPath: '/models/face_landmarker.task', delegate },
     runningMode: 'VIDEO',
     numFaces: 1,
   });
+}
+
+async function createFaceLandmarker() {
   try {
-    return await FaceLandmarker.createFromOptions(fileset, opts('GPU'));
+    return await createFaceLandmarkerOn('GPU');
   } catch {
     delegateUsed = 'CPU';
-    return FaceLandmarker.createFromOptions(fileset, opts('CPU'));
+    return createFaceLandmarkerOn('CPU');
   }
 }
 
@@ -192,6 +197,28 @@ async function main() {
   let energy = 0;
 
   let reportedError = false;
+  let detectFails = 0;
+  let lastDetectError = '';
+  let swapping = false;
+
+  // GPU 델리게이트가 계속 NaN을 뱉으면 CPU로 다시 만든다.
+  // 만드는 동안은 검출을 건너뛴다 — 옛 인스턴스를 닫는 중에 부르면 또 터진다.
+  function swapToCpu() {
+    if (swapping) return;
+    swapping = true;
+    delegateUsed = 'CPU(전환중)';
+    createFaceLandmarkerOn('CPU')
+      .then((next) => {
+        faceLandmarker.close?.();
+        faceLandmarker = next;
+        delegateUsed = 'CPU';
+        detectFails = 0;
+      })
+      .catch((err) => fail(`CPU 전환 실패: ${err.message}`))
+      .finally(() => {
+        swapping = false;
+      });
+  }
 
   function loop() {
     try {
@@ -213,9 +240,24 @@ async function main() {
     lastTickAt = now;
     syncCanvas();
 
-    if (video.currentTime !== lastVideoTime && video.videoWidth > 0) {
+    const ready =
+      video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0 && !swapping;
+
+    if (ready && video.currentTime !== lastVideoTime) {
       lastVideoTime = video.currentTime;
-      lastResult = faceLandmarker.detectForVideo(video, now);
+
+      // 한 프레임 실패로 루프를 죽이지 않는다.
+      // 모바일에서는 "ROI contains NaN values"가 산발적으로 뜨는데,
+      // 다음 프레임엔 멀쩡한 경우가 많다. 계속 실패하면 그때 CPU로 갈아탄다.
+      try {
+        lastResult = faceLandmarker.detectForVideo(video, now);
+        detectFails = 0;
+      } catch (err) {
+        detectFails += 1;
+        lastDetectError = err.message;
+        if (detectFails >= 12 && delegateUsed === 'GPU') swapToCpu();
+      }
+
       ({ brushing, energy } = detector.update(lastResult?.faceLandmarks?.[0] ?? null, now));
 
       // 프레임 간격을 지수 평활해서 FPS 표시가 튀지 않게 한다.
@@ -248,7 +290,8 @@ async function main() {
         ` · FPS: ${fps.toFixed(0)} · ${delegateUsed}` +
         ` · video ${video.videoWidth}x${video.videoHeight}` +
         ` · canvas ${canvas.width}x${canvas.height}` +
-        ` · art ${Object.keys(art).length}`;
+        ` · art ${Object.keys(art).length}` +
+        (detectFails ? ` · 검출실패 ${detectFails}회: ${lastDetectError.slice(0, 60)}` : '');
     }
   }
 
