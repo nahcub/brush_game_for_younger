@@ -1,0 +1,6 @@
+node_modules
+dist
+
+# 재생성 가능한 에셋 (npm install 후 스크립트로 복사/다운로드)
+public/wasm
+public/models

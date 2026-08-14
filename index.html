@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>양치 게임 프로토타입</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main>
+      <div id="stage">
+        <video id="webcam" autoplay playsinline muted></video>
+        <canvas id="overlay"></canvas>
+
+        <div id="start" class="screen">
+          <div class="screen__card">
+            <div class="screen__title">양치 시간!</div>
+            <div class="screen__sub">칫솔을 들고 준비되면 눌러요</div>
+            <button id="start-btn" class="screen__btn" disabled>준비 중…</button>
+          </div>
+        </div>
+
+        <div id="complete" class="screen hidden">
+          <!-- 1단계: 지난번 상자 개봉 -->
+          <div id="phase-open" class="screen__card">
+            <div class="screen__title">양치 완료!</div>
+            <div class="screen__sub">지난번 상자가 열려요</div>
+            <div id="open-box" class="complete__box">⬜</div>
+            <div id="open-item" class="item hidden">
+              <div id="item-emoji" class="item__emoji">🎁</div>
+              <div id="item-name" class="item__name">아이템 획득!</div>
+            </div>
+            <button id="open-btn" class="screen__btn">상자 열기</button>
+          </div>
+
+          <!-- 2단계: 오늘 상자 획득 (잠김) -->
+          <div id="phase-new" class="screen__card hidden">
+            <div class="screen__title">오늘의 상자!</div>
+            <div id="box-emoji" class="complete__box">⬜</div>
+            <div id="box-name" class="complete__name">실버박스 획득!</div>
+            <div id="box-reason" class="complete__reason"></div>
+            <div class="complete__locked">🔒 다음 양치 때 열려요!</div>
+            <button id="restart" class="screen__btn">다시 하기</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="lyrics">치카치카 샤카샤카</div>
+
+      <div id="gauge">
+        <div id="gauge-fill"></div>
+        <div id="gauge-time">0:00 / 0:20</div>
+      </div>
+
+      <div id="panel">
+        <div id="status" class="status status--off">대기 중</div>
+        <div id="brush-status" class="status status--off">멈춤</div>
+        <div id="debug">움직임: — · 판정: — · FPS: —</div>
+      </div>
+    </main>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

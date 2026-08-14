@@ -1,0 +1,284 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #14161c;
+  color: #e9ecf2;
+  font: 16px/1.4 system-ui, sans-serif;
+}
+
+main {
+  width: min(960px, 100vw - 32px);
+}
+
+/* display를 쓰는 요소 모두에 걸려야 한다 (.screen은 flex, 카드는 block) */
+.hidden {
+  display: none !important;
+}
+
+/* 비율은 실제 웹캠 해상도에서 JS가 채운다.
+   여기가 영상 비율과 어긋나면 object-fit이 영상만 잘라내고 캔버스는 안 잘려서 랜드마크가 밀린다. */
+#stage {
+  position: relative;
+  aspect-ratio: var(--video-aspect, 16 / 9);
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* 웹캠과 오버레이만 좌우 반전한다 (거울처럼).
+   오버레이 화면까지 뒤집히면 글자가 거꾸로 나오므로 #stage에 걸면 안 된다. */
+#webcam,
+#overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: scaleX(-1);
+}
+
+#webcam {
+  object-fit: cover;
+}
+
+/* --- 가사 --- */
+#lyrics {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #ffe08a;
+  text-shadow: 0 2px 12px rgba(255, 200, 80, 0.25);
+}
+
+.lyrics--pop {
+  animation: lyrics-pop 0.35s cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+
+/* --- 진행 게이지 --- */
+#gauge {
+  position: relative;
+  height: 34px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: #232735;
+  overflow: hidden;
+}
+
+#gauge-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #38bdf8, #4ade80);
+  transition: width 0.1s linear;
+}
+
+#gauge-time {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+/* --- 상태 패널 --- */
+#panel {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.status {
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.status--on {
+  background: #1d5c3a;
+  color: #b8f5d2;
+}
+
+.status--off {
+  background: #5c2020;
+  color: #f7c9c9;
+}
+
+#debug {
+  font-family: ui-monospace, monospace;
+  font-size: 14px;
+  color: #97a0b0;
+}
+
+/* --- 시작 / 완료 화면 --- */
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 12, 18, 0.82);
+  animation: fade-in 0.4s ease;
+}
+
+.screen__card {
+  text-align: center;
+  padding: 28px 40px;
+  border-radius: 20px;
+  background: linear-gradient(160deg, #2b3350, #1a1f30);
+  box-shadow: 0 0 60px rgba(56, 189, 248, 0.35);
+  animation: pop-in 0.45s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+.screen__title {
+  font-size: 30px;
+  font-weight: 800;
+}
+
+.screen__sub {
+  margin-top: 6px;
+  color: #9fb2d8;
+}
+
+.screen__btn {
+  margin-top: 18px;
+  padding: 12px 28px;
+  border: 0;
+  border-radius: 999px;
+  background: #38bdf8;
+  color: #0b1120;
+  font-size: 18px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.screen__btn:disabled {
+  background: #47506a;
+  color: #9aa4bd;
+  cursor: default;
+}
+
+.complete__box {
+  font-size: 72px;
+  margin: 8px 0;
+  animation: wiggle 1.4s ease-in-out infinite;
+}
+
+/* 개봉: 상자가 부르르 떨다가 펑 터지며 사라진다 */
+.complete__box--shaking {
+  animation: shake 0.6s ease-in-out;
+}
+
+.complete__box--burst {
+  animation: burst 0.35s ease-in forwards;
+}
+
+.item {
+  margin: 4px 0 2px;
+  animation: item-reveal 0.6s cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+
+.item__emoji {
+  font-size: 84px;
+  filter: drop-shadow(0 0 24px rgba(255, 224, 138, 0.55));
+}
+
+.item__name {
+  font-size: 22px;
+  font-weight: 800;
+  color: #ffe08a;
+}
+
+.complete__name {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.complete__reason {
+  margin-top: 4px;
+  color: #9fb2d8;
+}
+
+.complete__locked {
+  margin-top: 14px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffd88a;
+  font-weight: 700;
+}
+
+@keyframes lyrics-pop {
+  from {
+    transform: scale(0.85);
+    opacity: 0.3;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: rotate(0) scale(1);
+  }
+  20% {
+    transform: rotate(-14deg) scale(1.05);
+  }
+  40% {
+    transform: rotate(14deg) scale(1.05);
+  }
+  60% {
+    transform: rotate(-10deg) scale(1.12);
+  }
+  80% {
+    transform: rotate(10deg) scale(1.12);
+  }
+}
+
+@keyframes burst {
+  to {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+@keyframes item-reveal {
+  from {
+    transform: scale(0.3) rotate(-20deg);
+    opacity: 0;
+  }
+}
+
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(-6deg) scale(1);
+  }
+  50% {
+    transform: rotate(6deg) scale(1.08);
+  }
+}
