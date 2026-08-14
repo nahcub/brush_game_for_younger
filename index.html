@@ -3,61 +3,48 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>양치 게임 프로토타입</title>
+    <title>공룡 양치</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <main>
+    <main id="world">
+      <div id="hud">
+        <img id="hud-mascot" src="/art/mascot.png" alt="" />
+        <div id="gauge"><div id="gauge-fill"></div></div>
+      </div>
+
       <div id="stage">
         <video id="webcam" autoplay playsinline muted></video>
         <canvas id="overlay"></canvas>
+        <div id="vignette"></div>
 
+        <!-- 시작: 글자를 못 읽는 아이에게 마스코트가 "여기 봐"를 대신한다 -->
         <div id="start" class="screen">
-          <div class="screen__card">
-            <div class="screen__title">양치 시간!</div>
-            <div class="screen__sub">칫솔을 들고 준비되면 눌러요</div>
-            <button id="start-btn" class="screen__btn" disabled>준비 중…</button>
-          </div>
+          <img id="start-mascot" src="/art/mascot.png" alt="" />
+          <button id="start-btn" class="btn btn--play" disabled aria-label="시작">
+            <span id="start-icon">…</span>
+          </button>
         </div>
 
+        <!-- 완료: 몰에서는 다시 오지 않는다. 그 자리에서 바로 열어준다 -->
         <div id="complete" class="screen hidden">
-          <!-- 1단계: 지난번 상자 개봉 -->
-          <div id="phase-open" class="screen__card">
-            <div class="screen__title">양치 완료!</div>
-            <div class="screen__sub">지난번 상자가 열려요</div>
-            <div id="open-box" class="complete__box">⬜</div>
-            <div id="open-item" class="item hidden">
-              <div id="item-emoji" class="item__emoji">🎁</div>
-              <div id="item-name" class="item__name">아이템 획득!</div>
-            </div>
-            <button id="open-btn" class="screen__btn">상자 열기</button>
+          <img id="box-img" src="/art/box-closed.png" alt="상자" />
+          <div id="item" class="hidden">
+            <div id="item-emoji">🎁</div>
+            <div id="item-name"></div>
           </div>
-
-          <!-- 2단계: 오늘 상자 획득 (잠김) -->
-          <div id="phase-new" class="screen__card hidden">
-            <div class="screen__title">오늘의 상자!</div>
-            <div id="box-emoji" class="complete__box">⬜</div>
-            <div id="box-name" class="complete__name">실버박스 획득!</div>
-            <div id="box-reason" class="complete__reason"></div>
-            <div class="complete__locked">🔒 다음 양치 때 열려요!</div>
-            <button id="restart" class="screen__btn">다시 하기</button>
-          </div>
+          <button id="restart" class="btn btn--again hidden" aria-label="다시 하기">↻</button>
         </div>
-      </div>
-
-      <div id="lyrics">치카치카 샤카샤카</div>
-
-      <div id="gauge">
-        <div id="gauge-fill"></div>
-        <div id="gauge-time">0:00 / 0:20</div>
-      </div>
-
-      <div id="panel">
-        <div id="status" class="status status--off">대기 중</div>
-        <div id="brush-status" class="status status--off">멈춤</div>
-        <div id="debug">움직임: — · 판정: — · FPS: —</div>
       </div>
     </main>
+
+    <!-- 개발용. 기본은 숨김, D키로 켠다 -->
+    <div id="dev" class="hidden">
+      <span id="status">대기 중</span>
+      <span id="brush-status">멈춤</span>
+      <span id="gauge-time">0:00 / 0:20</span>
+      <span id="debug">움직임: — · 판정: — · FPS: —</span>
+    </div>
 
     <script type="module" src="/src/main.js"></script>
   </body>

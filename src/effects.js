@@ -1,8 +1,10 @@
-// 3단계: 입 주변 필터. 양치 중일 때만 거품과 별이 뿜어져 나온다.
-// 목적은 "잘 만든 필터"가 아니라 아이가 즉시 알아차릴 시각 피드백이다.
+// 입 주변 거품과 반짝이. 양치 중일 때만 뿜어져 나온다.
+// 목적은 "잘 만든 파티클"이 아니라 아이가 즉시 알아차릴 시각 피드백이다.
+//
+// 이미지는 한 종류씩만 있고, 개수·크기·궤적은 전부 여기서 만든다.
 
-const SPAWN_PER_SEC = 40; // 양치 중 초당 생성되는 거품 수
-const LIFE_MS = 1200;
+const SPAWN_PER_SEC = 26; // 양치 중 초당 생성 수
+const LIFE_MS = 1400;
 
 // 입술 바깥 테두리. 여기서 거품이 나온다.
 const LIP_RING = [
@@ -11,7 +13,7 @@ const LIP_RING = [
 
 const rand = (min, max) => min + Math.random() * (max - min);
 
-export function createEffects() {
+export function createEffects(art) {
   const particles = [];
   let spawnDebt = 0;
 
@@ -26,7 +28,8 @@ export function createEffects() {
         }
         p.x += p.vx * dtMs;
         p.y += p.vy * dtMs;
-        p.vy -= 0.0000004 * dtMs; // 거품은 점점 위로 뜬다
+        p.vy -= 0.0000005 * dtMs; // 거품은 점점 위로 뜬다
+        p.spin += p.spinRate * dtMs;
       }
 
       if (!brushing || !landmarks) {
@@ -38,14 +41,16 @@ export function createEffects() {
       while (spawnDebt >= 1) {
         spawnDebt -= 1;
         const anchor = landmarks[LIP_RING[(Math.random() * LIP_RING.length) | 0]];
+        const star = Math.random() < 0.22;
         particles.push({
-          x: anchor.x + rand(-0.012, 0.012),
-          y: anchor.y + rand(-0.008, 0.008),
-          vx: rand(-0.00004, 0.00004),
-          vy: rand(-0.00008, -0.00002),
-          r: rand(0.004, 0.013),
-          star: Math.random() < 0.25,
-          hue: rand(180, 220),
+          x: anchor.x + rand(-0.014, 0.014),
+          y: anchor.y + rand(-0.01, 0.01),
+          vx: rand(-0.00005, 0.00005),
+          vy: rand(-0.00009, -0.00003),
+          size: star ? rand(0.05, 0.085) : rand(0.035, 0.1),
+          star,
+          spin: rand(0, Math.PI * 2),
+          spinRate: rand(-0.0016, 0.0016),
           age: 0,
         });
       }
@@ -53,40 +58,25 @@ export function createEffects() {
 
     draw(ctx, width, height) {
       for (const p of particles) {
+        const img = p.star ? art.sparkle : art.bubble;
+        if (!img) continue;
+
         const t = p.age / LIFE_MS;
         const alpha = Math.sin(t * Math.PI); // 나타났다 사라진다
-        const x = p.x * width;
-        const y = p.y * height;
-        const r = p.r * width * (0.6 + t * 0.7);
+        const s = p.size * width * (0.55 + t * 0.6);
 
-        if (p.star) {
-          ctx.save();
-          ctx.translate(x, y);
-          ctx.rotate(t * 3);
-          ctx.fillStyle = `rgba(255, 240, 150, ${alpha})`;
-          drawStar(ctx, r);
-          ctx.restore();
-        } else {
-          ctx.beginPath();
-          ctx.arc(x, y, r, 0, Math.PI * 2);
-          ctx.fillStyle = `hsla(${p.hue}, 90%, 85%, ${alpha * 0.55})`;
-          ctx.fill();
-          ctx.strokeStyle = `hsla(${p.hue}, 90%, 97%, ${alpha * 0.9})`;
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
-        }
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(p.x * width, p.y * height);
+        ctx.rotate(p.spin);
+        ctx.drawImage(img, -s / 2, -s / 2, s, s);
+        ctx.restore();
       }
     },
-  };
-}
 
-function drawStar(ctx, r) {
-  ctx.beginPath();
-  for (let i = 0; i < 10; i++) {
-    const radius = i % 2 === 0 ? r : r * 0.45;
-    const angle = (i / 10) * Math.PI * 2 - Math.PI / 2;
-    ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
-  }
-  ctx.closePath();
-  ctx.fill();
+    clear() {
+      particles.length = 0;
+      spawnDebt = 0;
+    },
+  };
 }

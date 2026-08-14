@@ -1,3 +1,7 @@
+/* 4~6세용. 규칙 두 개만 지킨다.
+   1) 글자에 의존하지 않는다 — 정보는 캐릭터·색·움직임으로 전달한다
+   2) 아이 화면에 개발 정보를 두지 않는다 — 디버그는 전부 #dev 안에 있고 기본은 숨김 */
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -9,117 +13,86 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #14161c;
-  color: #e9ecf2;
+  background: #3f9bd9;
+  color: #6b4a2f;
   font: 16px/1.4 system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-main {
-  width: min(960px, 100vw - 32px);
-}
-
-/* display를 쓰는 요소 모두에 걸려야 한다 (.screen은 flex, 카드는 block) */
 .hidden {
   display: none !important;
 }
 
-/* 비율은 실제 웹캠 해상도에서 JS가 채운다.
-   여기가 영상 비율과 어긋나면 object-fit이 영상만 잘라내고 캔버스는 안 잘려서 랜드마크가 밀린다. */
-#stage {
-  position: relative;
-  aspect-ratio: var(--video-aspect, 16 / 9);
-  background: #000;
-  border-radius: 12px;
-  overflow: hidden;
+/* --- 바깥 세계: 하늘과 들판 --- */
+#world {
+  width: min(880px, 100vw - 20px);
+  padding: 12px 16px 18px;
+  border-radius: 30px;
+  background: linear-gradient(#63bcf0 0%, #4aa8e8 52%, #6cbf3f 52%, #7cc94a 100%);
+  box-shadow: 0 12px 40px rgba(20, 60, 90, 0.28);
 }
 
-/* 웹캠과 오버레이만 좌우 반전한다 (거울처럼).
-   오버레이 화면까지 뒤집히면 글자가 거꾸로 나오므로 #stage에 걸면 안 된다. */
-#webcam,
-#overlay {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  transform: scaleX(-1);
+/* --- 상단 게이지 --- */
+#hud {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 4px 12px;
 }
 
-#webcam {
-  object-fit: cover;
+#hud-mascot {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  flex: none;
 }
 
-/* --- 가사 --- */
-#lyrics {
-  margin-top: 14px;
-  text-align: center;
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  color: #ffe08a;
-  text-shadow: 0 2px 12px rgba(255, 200, 80, 0.25);
-}
-
-.lyrics--pop {
-  animation: lyrics-pop 0.35s cubic-bezier(0.2, 1.5, 0.4, 1);
-}
-
-/* --- 진행 게이지 --- */
 #gauge {
-  position: relative;
-  height: 34px;
-  margin-top: 12px;
+  flex: 1;
+  height: 22px;
   border-radius: 999px;
-  background: #232735;
+  background: #f7e8ce;
+  box-shadow: inset 0 2px 5px rgba(150, 110, 70, 0.28);
   overflow: hidden;
 }
 
 #gauge-fill {
   height: 100%;
   width: 0%;
-  background: linear-gradient(90deg, #38bdf8, #4ade80);
-  transition: width 0.1s linear;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ffd23f, #ffb02e);
+  transition: width 0.12s linear;
 }
 
-#gauge-time {
+/* --- 카메라 창 ---
+   4:3으로 잘라서 얼굴을 키운다. 웹캠은 보통 16:9라 좌우가 잘린다.
+   video와 canvas가 같은 intrinsic 크기 + 같은 object-fit이어야 잘리는 영역이 일치한다.
+   여기가 어긋나면 공룡 파츠가 얼굴에서 밀린다. */
+#stage {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  border-radius: 46px;
+  border: 9px solid #f7e8ce;
+  background: #cfe3ea;
+  overflow: hidden;
+}
+
+#webcam,
+#overlay {
   position: absolute;
   inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: ui-monospace, monospace;
-  font-weight: 700;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1); /* 거울처럼. 오버레이 화면(#screen)에는 걸지 않는다 */
 }
 
-/* --- 상태 패널 --- */
-#panel {
-  margin-top: 12px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.status {
-  padding: 8px 14px;
-  border-radius: 999px;
-  font-weight: 700;
-}
-
-.status--on {
-  background: #1d5c3a;
-  color: #b8f5d2;
-}
-
-.status--off {
-  background: #5c2020;
-  color: #f7c9c9;
-}
-
-#debug {
-  font-family: ui-monospace, monospace;
-  font-size: 14px;
-  color: #97a0b0;
+/* 쇼핑몰 배경이 그대로 보이면 아늑함이 깨진다. 가장자리를 크림색으로 녹인다. */
+#vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 55px 26px rgba(247, 232, 206, 0.9);
 }
 
 /* --- 시작 / 완료 화면 --- */
@@ -127,116 +100,137 @@ main {
   position: absolute;
   inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(10, 12, 18, 0.82);
-  animation: fade-in 0.4s ease;
+  gap: 6px;
+  background: rgba(247, 232, 206, 0.9);
+  animation: fade-in 0.35s ease;
 }
 
-.screen__card {
-  text-align: center;
-  padding: 28px 40px;
-  border-radius: 20px;
-  background: linear-gradient(160deg, #2b3350, #1a1f30);
-  box-shadow: 0 0 60px rgba(56, 189, 248, 0.35);
-  animation: pop-in 0.45s cubic-bezier(0.2, 1.4, 0.4, 1);
+#start-mascot {
+  width: 42%;
+  max-width: 220px;
+  object-fit: contain;
+  animation: hop 1.5s ease-in-out infinite;
 }
 
-.screen__title {
-  font-size: 30px;
-  font-weight: 800;
-}
-
-.screen__sub {
-  margin-top: 6px;
-  color: #9fb2d8;
-}
-
-.screen__btn {
-  margin-top: 18px;
-  padding: 12px 28px;
+.btn {
   border: 0;
   border-radius: 999px;
-  background: #38bdf8;
-  color: #0b1120;
-  font-size: 18px;
+  background: #ee5540;
+  color: #fff6e8;
   font-weight: 800;
   cursor: pointer;
+  box-shadow: 0 5px 0 #c23e30;
+  transition: transform 0.08s, box-shadow 0.08s;
 }
 
-.screen__btn:disabled {
-  background: #47506a;
-  color: #9aa4bd;
+.btn:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 #c23e30;
+}
+
+.btn:disabled {
+  background: #cbb9a2;
+  box-shadow: 0 5px 0 #a9977f;
   cursor: default;
 }
 
-.complete__box {
-  font-size: 72px;
-  margin: 8px 0;
-  animation: wiggle 1.4s ease-in-out infinite;
+.btn--play {
+  width: 96px;
+  height: 96px;
+  font-size: 40px;
 }
 
-/* 개봉: 상자가 부르르 떨다가 펑 터지며 사라진다 */
-.complete__box--shaking {
-  animation: shake 0.6s ease-in-out;
+.btn--again {
+  width: 68px;
+  height: 68px;
+  font-size: 32px;
+  margin-top: 8px;
 }
 
-.complete__box--burst {
-  animation: burst 0.35s ease-in forwards;
+/* --- 상자 --- */
+#box-img {
+  width: 46%;
+  max-width: 230px;
+  object-fit: contain;
+  cursor: pointer;
+  animation: wiggle 1.3s ease-in-out infinite;
 }
 
-.item {
-  margin: 4px 0 2px;
-  animation: item-reveal 0.6s cubic-bezier(0.2, 1.5, 0.4, 1);
+#box-img.shaking {
+  animation: shake 0.62s ease-in-out;
 }
 
-.item__emoji {
-  font-size: 84px;
-  filter: drop-shadow(0 0 24px rgba(255, 224, 138, 0.55));
+#box-img.opened {
+  animation: pop 0.4s cubic-bezier(0.2, 1.5, 0.4, 1);
+  cursor: default;
 }
 
-.item__name {
-  font-size: 22px;
+#item {
+  text-align: center;
+  animation: reveal 0.5s cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+
+#item-emoji {
+  font-size: 68px;
+  line-height: 1;
+}
+
+#item-name {
+  margin-top: 2px;
+  font-size: 20px;
   font-weight: 800;
-  color: #ffe08a;
+  color: #c23e30;
 }
 
-.complete__name {
-  font-size: 22px;
-  font-weight: 700;
-}
-
-.complete__reason {
-  margin-top: 4px;
-  color: #9fb2d8;
-}
-
-.complete__locked {
-  margin-top: 14px;
+/* --- 개발 패널 (D키) --- */
+#dev {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
   padding: 8px 12px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffd88a;
-  font-weight: 700;
+  background: rgba(16, 20, 28, 0.92);
+  color: #cbd5e1;
+  font: 13px/1.4 ui-monospace, monospace;
 }
 
-@keyframes lyrics-pop {
-  from {
-    transform: scale(0.85);
-    opacity: 0.3;
-  }
+#dev .on {
+  color: #86efac;
 }
 
-@keyframes pop-in {
-  from {
-    transform: scale(0.6);
-    opacity: 0;
-  }
+#dev .off {
+  color: #fca5a5;
 }
 
 @keyframes fade-in {
   from {
     opacity: 0;
+  }
+}
+
+@keyframes hop {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(2deg);
+  }
+}
+
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(-5deg) scale(1);
+  }
+  50% {
+    transform: rotate(5deg) scale(1.05);
   }
 }
 
@@ -246,39 +240,28 @@ main {
     transform: rotate(0) scale(1);
   }
   20% {
-    transform: rotate(-14deg) scale(1.05);
+    transform: rotate(-15deg) scale(1.06);
   }
   40% {
-    transform: rotate(14deg) scale(1.05);
+    transform: rotate(15deg) scale(1.06);
   }
   60% {
-    transform: rotate(-10deg) scale(1.12);
+    transform: rotate(-11deg) scale(1.13);
   }
   80% {
-    transform: rotate(10deg) scale(1.12);
+    transform: rotate(11deg) scale(1.13);
   }
 }
 
-@keyframes burst {
-  to {
-    transform: scale(1.9);
-    opacity: 0;
-  }
-}
-
-@keyframes item-reveal {
+@keyframes pop {
   from {
-    transform: scale(0.3) rotate(-20deg);
-    opacity: 0;
+    transform: scale(0.7);
   }
 }
 
-@keyframes wiggle {
-  0%,
-  100% {
-    transform: rotate(-6deg) scale(1);
-  }
-  50% {
-    transform: rotate(6deg) scale(1.08);
+@keyframes reveal {
+  from {
+    transform: scale(0.3) rotate(-18deg);
+    opacity: 0;
   }
 }
