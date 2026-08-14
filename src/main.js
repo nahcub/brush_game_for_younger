@@ -1,4 +1,4 @@
-import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
+import { FaceLandmarker, HandLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 import { loadArt } from './assets.js';
 import { createBrushDetector, BRUSH_THRESHOLD } from './brushDetector.js';
 import { createEffects } from './effects.js';
@@ -83,6 +83,22 @@ async function createFaceLandmarker() {
   }
 }
 
+// 손은 "입 근처에 있는가"만 보면 되므로 GPU/CPU 전환 없이 한 번만 만든다.
+async function createHandLandmarker() {
+  filesetPromise ??= FilesetResolver.forVisionTasks('/wasm');
+  const options = {
+    baseOptions: { modelAssetPath: '/models/hand_landmarker.task', delegate: 'GPU' },
+    runningMode: 'VIDEO',
+    numHands: 2,
+  };
+  try {
+    return await HandLandmarker.createFromOptions(await filesetPromise, options);
+  } catch {
+    options.baseOptions.delegate = 'CPU';
+    return HandLandmarker.createFromOptions(await filesetPromise, options);
+  }
+}
+
 // 시작 버튼을 누르기 전엔 카메라를 켜지 않는다.
 // facingMode는 태블릿·폰에서 후면 카메라가 잡히는 걸 막는다.
 async function startWebcam() {
@@ -109,9 +125,14 @@ async function startWebcam() {
 async function main() {
   let art;
   let faceLandmarker;
+  let handLandmarker;
   try {
     // 모델과 그림을 미리 받아둔다. 시작 버튼을 누르는 순간 바로 시작되게.
-    [art, faceLandmarker] = await Promise.all([loadArt(), createFaceLandmarker()]);
+    [art, faceLandmarker, handLandmarker] = await Promise.all([
+      loadArt(),
+      createFaceLandmarker(),
+      createHandLandmarker(),
+    ]);
   } catch (err) {
     startIcon.textContent = '!';
     setStatus(statusEl, `로드 실패: ${err.message}`, false);
@@ -182,23 +203,38 @@ async function main() {
 
   boxImg.addEventListener('click', openBox);
 
+  // "다시 하기"는 바로 다음 판을 시작하지 않는다. 몰에서는 지나가던 다른 아이가
+  // 이어받을 수도 있으므로, 시작 화면(랜딩)으로 돌아가 다시 버튼을 누르게 한다.
+  // 웹캠은 이미 켜져 있으므로 재요청 없이 화면만 되돌린다.
+  function showLanding() {
+    startBtn.disabled = false;
+    startIcon.textContent = '▶';
+    startEl.classList.remove('hidden');
+    startBtn.addEventListener('click', () => startEl.classList.add('hidden'), { once: true });
+  }
+
   restartBtn.addEventListener('click', () => {
     game.reset();
     effects.clear();
     completeEl.classList.add('hidden');
+    showLanding();
   });
 
   let lastVideoTime = -1;
   let lastResult = null;
+  let lastHandResult = null;
+  let handFrameCount = 0;
   let lastFrameAt = performance.now();
   let lastTickAt = performance.now();
   let fps = 0;
   let brushing = false;
   let energy = 0;
+  let handNear = false;
 
   let reportedError = false;
   let detectFails = 0;
   let lastDetectError = '';
+  let handDetectFails = 0;
   let swapping = false;
 
   // GPU 델리게이트가 계속 NaN을 뱉으면 CPU로 다시 만든다.
@@ -258,10 +294,23 @@ async function main() {
         if (detectFails >= 12 && delegateUsed === 'GPU') swapToCpu();
       }
 
+      // 손 모델까지 매 프레임 돌리면 저사양 폰에서 부담이 크다. 한 프레임 걸러 돌리고
+      // 그 사이엔 이전 결과를 유지한다 (brushDetector가 짧은 공백은 알아서 봐준다).
+      handFrameCount += 1;
+      if (handFrameCount % 2 === 0) {
+        try {
+          lastHandResult = handLandmarker.detectForVideo(video, now);
+          handDetectFails = 0;
+        } catch (err) {
+          handDetectFails += 1;
+        }
+      }
+
       // 화면 비율을 넘겨야 노트북(가로)과 폰(세로)에서 같은 수치가 나온다.
       const aspect = canvas.height ? canvas.width / canvas.height : 1;
-      ({ brushing, energy } = detector.update(
+      ({ brushing, energy, handNear } = detector.update(
         lastResult?.faceLandmarks?.[0] ?? null,
+        lastHandResult?.landmarks ?? [],
         now,
         aspect,
       ));
@@ -293,11 +342,13 @@ async function main() {
       setStatus(brushEl, brushing ? '양치 중' : '멈춤', brushing);
       debugEl.textContent =
         `움직임: ${energy.toFixed(2)}/${BRUSH_THRESHOLD.toFixed(2)}` +
+        ` · 손: ${handNear ? '가까움' : '없음'}` +
         ` · FPS: ${fps.toFixed(0)} · ${delegateUsed}` +
         ` · video ${video.videoWidth}x${video.videoHeight}` +
         ` · canvas ${canvas.width}x${canvas.height}` +
         ` · art ${Object.keys(art).length}` +
-        (detectFails ? ` · 검출실패 ${detectFails}회: ${lastDetectError.slice(0, 60)}` : '');
+        (detectFails ? ` · 검출실패 ${detectFails}회: ${lastDetectError.slice(0, 60)}` : '') +
+        (handDetectFails ? ` · 손검출실패 ${handDetectFails}회` : '');
     }
   }
 

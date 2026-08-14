@@ -15,10 +15,18 @@
 // 노트북(가로)과 폰(세로)에서 비율이 뒤집히면 같은 움직임이 다른 수치로 나온다.
 
 // ---- 튜닝 상수 (웹캠 디버그 수치 보면서 조정) ----
-export const BRUSH_THRESHOLD = 0.38; // 얼굴폭/초. 이 위면 양치 중
+export const BRUSH_THRESHOLD = 0.32; // 얼굴폭/초. 이 위면 양치 중
 export const SMOOTHING = 0.15; // EMA 계수. 낮을수록 둔하고 안정적
 export const STOP_DELAY_MS = 2000; // 신호가 끊겨도 이만큼은 양치 중으로 봐준다
 const MIN_FACE = 0.06; // 얼굴이 이보다 작으면 랜드마크가 너무 흔들려서 못 믿는다
+
+// 입만 벌렸다 닫아도 위 신호는 튄다. 손이 입 근처에 와 있을 때만 "양치 중"으로 인정한다.
+export const HAND_NEAR_THRESHOLD = 0.75; // 얼굴좌표계 단위(얼굴폭 기준). 이 안이면 "가까움"
+export const HAND_STOP_DELAY_MS = 700; // 칫솔에 손가락이 가려져 잠깐 놓쳐도 이만큼은 "가까움" 유지
+
+// 앞니 닦을 땐 입은 거의 안 움직이고 손(칫솔)만 흔들린다.
+// 그래서 "입 움직임" 대신 "손 자체의 움직임"도 브러싱 신호로 인정한다.
+export const HAND_MOVE_THRESHOLD = 0.55; // 얼굴폭/초. 손이 이 이상 흔들리면 브러싱으로 인정
 
 // 입술 + 하관. 칫솔질이 흔드는 부위.
 export const MOUTH_INDICES = [
@@ -66,29 +74,51 @@ function mouthInFaceSpace(lm, pose, aspect) {
   return out;
 }
 
+/** 점 하나를 얼굴 좌표계로 옮긴다. 손 랜드마크를 입과 같은 기준으로 비교하기 위함. */
+function pointInFaceSpace(x, y, pose, aspect) {
+  const cos = Math.cos(-pose.angle);
+  const sin = Math.sin(-pose.angle);
+  const dx = x * aspect - pose.cx;
+  const dy = y - pose.cy;
+  return {
+    x: (dx * cos - dy * sin) / pose.size,
+    y: (dx * sin + dy * cos) / pose.size,
+  };
+}
+
 export function createBrushDetector() {
   let prev = null;
   let prevAt = 0;
   let energy = 0;
   let lastSignalAt = 0;
+  let lastHandNearAt = 0;
+  let handPrev = null;
+  let handPrevAt = 0;
+  let handEnergy = 0;
+  let lastHandMoveAt = 0;
 
   return {
     /**
      * @param {number} aspect 영상의 가로/세로 비. 안 주면 정사각으로 본다.
-     * @returns {{brushing: boolean, energy: number}}
+     * @param {Array<Array<{x:number,y:number}>>} hands 손마다 21개 랜드마크. 없으면 [].
+     * @returns {{brushing: boolean, energy: number, handNear: boolean}}
      */
-    update(landmarks, now, aspect = 1) {
+    update(landmarks, hands, now, aspect = 1) {
       if (!landmarks) {
         prev = null;
         energy = 0;
-        return { brushing: false, energy: 0 };
+        handPrev = null;
+        handEnergy = 0;
+        return { brushing: false, energy: 0, handNear: false };
       }
 
       const pose = headPose(landmarks, aspect);
       if (pose.size < MIN_FACE) {
         prev = null;
         energy = 0;
-        return { brushing: false, energy: 0 };
+        handPrev = null;
+        handEnergy = 0;
+        return { brushing: false, energy: 0, handNear: false };
       }
 
       const curr = mouthInFaceSpace(landmarks, pose, aspect);
@@ -107,11 +137,60 @@ export function createBrushDetector() {
       prevAt = now;
       energy += (raw - energy) * SMOOTHING;
 
+      let mcx = 0;
+      let mcy = 0;
+      for (let k = 0; k < MOUTH_INDICES.length; k++) {
+        mcx += curr[k * 2];
+        mcy += curr[k * 2 + 1];
+      }
+      mcx /= MOUTH_INDICES.length;
+      mcy /= MOUTH_INDICES.length;
+
+      // 입에 가장 가까운 손 하나를 고른다 (양손이 잡히면 더 가까운 쪽).
+      let closestHand = null;
+      let closestDist = Infinity;
+      for (const hand of hands ?? []) {
+        let hx = 0;
+        let hy = 0;
+        for (const p of hand) {
+          hx += p.x;
+          hy += p.y;
+        }
+        hx /= hand.length;
+        hy /= hand.length;
+        const hp = pointInFaceSpace(hx, hy, pose, aspect);
+        const dist = Math.hypot(hp.x - mcx, hp.y - mcy);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestHand = hp;
+        }
+      }
+
+      const handNearNow = closestHand !== null && closestDist < HAND_NEAR_THRESHOLD;
+      if (handNearNow) lastHandNearAt = now;
+      const handNear = lastHandNearAt > 0 && now - lastHandNearAt < HAND_STOP_DELAY_MS;
+
+      // 손 자체의 움직임(앞니 닦을 때처럼 입은 안 움직이고 손만 흔들리는 경우 대비).
+      const handDt = (now - handPrevAt) / 1000;
+      let handRaw = 0;
+      if (closestHand && handPrev && handDt > 0) {
+        handRaw = Math.hypot(closestHand.x - handPrev.x, closestHand.y - handPrev.y) / handDt;
+      }
+      handPrev = closestHand;
+      handPrevAt = now;
+      handEnergy += (handRaw - handEnergy) * SMOOTHING;
+      if (handEnergy > HAND_MOVE_THRESHOLD) lastHandMoveAt = now;
+      const handMoving = lastHandMoveAt > 0 && now - lastHandMoveAt < STOP_DELAY_MS;
+
       // 애매하면 관대하게. 신호가 끊겨도 STOP_DELAY_MS 동안은 양치 중으로 유지한다.
       if (energy > BRUSH_THRESHOLD) lastSignalAt = now;
-      const brushing = lastSignalAt > 0 && now - lastSignalAt < STOP_DELAY_MS;
+      const mouthActive = lastSignalAt > 0 && now - lastSignalAt < STOP_DELAY_MS;
 
-      return { brushing, energy };
+      // 손이 입 근처에 있고, (입이 움직이거나 손 자체가 움직이면) 양치 중으로 인정한다.
+      // 앞니를 닦을 땐 입은 거의 안 움직이므로 손의 움직임만으로도 인정돼야 한다.
+      const brushing = handNear && (mouthActive || handMoving);
+
+      return { brushing, energy, handNear };
     },
   };
 }
