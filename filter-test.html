@@ -1,0 +1,82 @@
+<!-- 임시 정렬 확인용 페이지. 웹캠 없이 filter.js의 배치만 검증한다. 확인 후 삭제. -->
+<meta charset="utf-8" />
+<title>filter placement test</title>
+<style>
+  body { margin: 0; background: #2b2b33; display: grid; place-items: center; height: 100vh; }
+  canvas { background: #4a5a6a; }
+</style>
+<canvas id="c" width="960" height="720"></canvas>
+<script type="module">
+  import { loadArt } from '/src/assets.js';
+  import { createFilter } from '/src/filter.js';
+
+  const c = document.getElementById('c');
+  const ctx = c.getContext('2d');
+  const W = c.width;
+  const H = c.height;
+
+  // filter.js가 쓰는 랜드마크는 234/454(관자놀이), 10(이마), 152(턱) 넷뿐이다.
+  // 그 넷만 가짜로 만들고, 같은 좌표에 얼굴 타원을 그려서 눈으로 정렬을 본다.
+  const FACE = { cx: 0.5, cy: 0.5, halfW: 0.115, halfH: 0.17, tilt: 0 };
+
+  function landmarks() {
+    const { cx, cy, halfW, halfH, tilt } = FACE;
+    const rot = (dx, dy) => ({
+      x: cx + dx * Math.cos(tilt) - dy * Math.sin(tilt) * (H / W),
+      y: cy + (dx * Math.sin(tilt) * (W / H) + dy * Math.cos(tilt)),
+    });
+    const lm = [];
+    lm[234] = rot(-halfW, 0);
+    lm[454] = rot(halfW, 0);
+    lm[10] = rot(0, -halfH);
+    lm[152] = rot(0, halfH);
+    // 반짝임이 참조하는 입가 랜드마크
+    lm[61] = rot(-halfW * 0.45, halfH * 0.5);
+    lm[291] = rot(halfW * 0.45, halfH * 0.5);
+    lm[0] = rot(0, halfH * 0.38);
+    lm[17] = rot(0, halfH * 0.62);
+    return lm;
+  }
+
+  function drawFace(lm) {
+    const { cx, cy, halfW, halfH, tilt } = FACE;
+    ctx.save();
+    ctx.translate(cx * W, cy * H);
+    ctx.rotate(tilt);
+    ctx.fillStyle = '#e8b48c';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, halfW * W, halfH * H, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.ellipse(-halfW * W * 0.4, -halfH * H * 0.2, 8, 10, 0, 0, Math.PI * 2);
+    ctx.ellipse(halfW * W * 0.4, -halfH * H * 0.2, 8, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    // 관자놀이 두 점 = filter가 얼굴폭으로 쓰는 거리
+    ctx.fillStyle = '#0f0';
+    for (const i of [234, 454, 10, 152]) {
+      ctx.beginPath();
+      ctx.arc(lm[i].x * W, lm[i].y * H, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  const art = await loadArt();
+  const filter = createFilter(art);
+  window.__art = art;
+  window.__face = FACE;
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = now - last;
+    last = now;
+    const lm = landmarks();
+    filter.update(window.__brushing ?? false, dt);
+    ctx.clearRect(0, 0, W, H);
+    drawFace(lm);
+    filter.draw(ctx, lm, W, H);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+</script>

@@ -28,10 +28,27 @@ const brushEl = $('brush-status');
 const gaugeTime = $('gauge-time');
 const debugEl = $('debug');
 
-// 아이한테 보여줄 땐 개발 정보가 방해된다. 기본은 숨김, D키로 토글.
+// 아이한테 보여줄 땐 개발 정보가 방해된다. 기본은 숨김.
+// 폰에는 키보드가 없으므로 상단 마스코트를 세 번 두드리는 길도 열어둔다.
 window.addEventListener('keydown', (e) => {
   if (e.key === 'd' || e.key === 'D') devEl.classList.toggle('hidden');
 });
+
+let taps = [];
+$('hud-mascot').addEventListener('click', () => {
+  const now = Date.now();
+  taps = [...taps, now].filter((t) => now - t < 1200);
+  if (taps.length >= 3) {
+    taps = [];
+    devEl.classList.toggle('hidden');
+  }
+});
+
+// 루프가 죽으면 화면은 멀쩡한데 아무것도 안 움직인다. 원인을 화면에 띄운다.
+function fail(msg) {
+  devEl.classList.remove('hidden');
+  debugEl.textContent = msg;
+}
 
 function setStatus(el, text, on) {
   el.textContent = text;
@@ -44,24 +61,44 @@ function formatTime(ms) {
 }
 
 // wasm과 모델 모두 public/에서 서빙한다. 영상은 브라우저 밖으로 나가지 않는다.
+// 폰·저사양 기기는 GPU 델리게이트가 없을 수 있으므로 CPU로 물러난다.
+let delegateUsed = 'GPU';
 async function createFaceLandmarker() {
   const fileset = await FilesetResolver.forVisionTasks('/wasm');
-  return FaceLandmarker.createFromOptions(fileset, {
-    baseOptions: { modelAssetPath: '/models/face_landmarker.task', delegate: 'GPU' },
+  const opts = (delegate) => ({
+    baseOptions: { modelAssetPath: '/models/face_landmarker.task', delegate },
     runningMode: 'VIDEO',
     numFaces: 1,
   });
+  try {
+    return await FaceLandmarker.createFromOptions(fileset, opts('GPU'));
+  } catch {
+    delegateUsed = 'CPU';
+    return FaceLandmarker.createFromOptions(fileset, opts('CPU'));
+  }
 }
 
 // 시작 버튼을 누르기 전엔 카메라를 켜지 않는다.
-// facingMode는 태블릿에서 후면 카메라가 잡히는 걸 막는다.
+// facingMode는 태블릿·폰에서 후면 카메라가 잡히는 걸 막는다.
 async function startWebcam() {
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: 'user', width: 1280, height: 720 },
+    video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
     audio: false,
   });
   video.srcObject = stream;
-  await new Promise((resolve) => video.addEventListener('loadeddata', resolve, { once: true }));
+
+  // loadeddata 시점에 videoWidth가 아직 0인 기기가 있다.
+  // 0으로 캔버스를 만들면 아무것도 안 그려지고 detectForVideo도 터진다.
+  await new Promise((resolve) => {
+    if (video.readyState >= 2 && video.videoWidth > 0) return resolve();
+    video.addEventListener('loadedmetadata', resolve, { once: true });
+  });
+  await video.play().catch(() => {}); // iOS는 명시적 play가 필요할 때가 있다
+
+  for (let i = 0; i < 40 && !video.videoWidth; i++) {
+    await new Promise((r) => requestAnimationFrame(r));
+  }
+  if (!video.videoWidth) throw new Error('카메라 해상도를 못 읽음');
 }
 
 async function main() {
@@ -94,8 +131,14 @@ async function main() {
   }
   startEl.classList.add('hidden');
 
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  // 폰은 회전하면 해상도가 바뀐다. 매 프레임 확인해서 캔버스를 맞춘다.
+  function syncCanvas() {
+    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+    }
+  }
+  syncCanvas();
 
   const detector = createBrushDetector();
   const filter = createFilter(art);
@@ -148,12 +191,29 @@ async function main() {
   let brushing = false;
   let energy = 0;
 
+  let reportedError = false;
+
   function loop() {
+    try {
+      tick();
+    } catch (err) {
+      // 예외가 여기서 안 잡히면 rAF 재호출까지 못 가서 루프가 통째로 죽는다.
+      // 화면은 카메라 영상이라 멀쩡해 보이고 필터만 안 나온다 — 원인을 알 수가 없다.
+      if (!reportedError) {
+        reportedError = true;
+        fail(`루프 오류: ${err.message}`);
+      }
+    }
+    requestAnimationFrame(loop);
+  }
+
+  function tick() {
     const now = performance.now();
     const dtMs = Math.min(now - lastTickAt, 100); // 탭 전환 후 큰 점프로 게이지가 튀지 않게
     lastTickAt = now;
+    syncCanvas();
 
-    if (video.currentTime !== lastVideoTime) {
+    if (video.currentTime !== lastVideoTime && video.videoWidth > 0) {
       lastVideoTime = video.currentTime;
       lastResult = faceLandmarker.detectForVideo(video, now);
       ({ brushing, energy } = detector.update(lastResult?.faceLandmarks?.[0] ?? null, now));
@@ -179,16 +239,17 @@ async function main() {
 
     gaugeFill.style.width = `${game.progress * 100}%`;
 
-    if (!devEl.classList.contains('hidden')) {
+    if (!devEl.classList.contains('hidden') && !reportedError) {
       gaugeTime.textContent = `${formatTime(game.elapsedMs)} / ${formatTime(DURATION_MS)}`;
       setStatus(statusEl, landmarks ? '얼굴 인식됨' : '얼굴 안 보임', Boolean(landmarks));
       setStatus(brushEl, brushing ? '양치 중' : '멈춤', brushing);
       debugEl.textContent =
-        `움직임: ${energy.toFixed(2)} / 임계 ${BRUSH_THRESHOLD.toFixed(2)}` +
-        ` · 판정: ${brushing ? 'BRUSHING' : 'IDLE'} · FPS: ${fps.toFixed(0)}`;
+        `움직임: ${energy.toFixed(2)}/${BRUSH_THRESHOLD.toFixed(2)}` +
+        ` · FPS: ${fps.toFixed(0)} · ${delegateUsed}` +
+        ` · video ${video.videoWidth}x${video.videoHeight}` +
+        ` · canvas ${canvas.width}x${canvas.height}` +
+        ` · art ${Object.keys(art).length}`;
     }
-
-    requestAnimationFrame(loop);
   }
 
   loop();

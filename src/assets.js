@@ -2,10 +2,7 @@
 // 루프가 돌기 시작한 뒤에 이미지가 도착하면 공룡이 한 조각씩 나타나서 이상해진다.
 
 const NAMES = [
-  'dino-crest',
-  'dino-snout',
-  'dino-horn-l',
-  'dino-horn-r',
+  'dino-frame', // 입이 뚫린 공룡 얼굴 한 장. 파츠(볏/뿔/주둥이)를 대체한다.
   'bubble',
   'sparkle',
   'mascot',

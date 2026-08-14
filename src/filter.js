@@ -9,32 +9,25 @@
 // ---- 좌표 기준점 ----
 const TEMPLE_L = 234; // 관자놀이. 둘 사이 거리가 얼굴 크기이자 기울기 기준
 const TEMPLE_R = 454;
-const BROW_MID = 168; // 미간. 얼굴 로컬 좌표계의 원점
-const NOSE_TIP = 1;
 const FOREHEAD = 10; // 이마 꼭대기
+const CHIN = 152;
 
-// 이빨은 여기서 그리지 않는다.
-// 입술 랜드마크마다 도형을 따로 찍으면 이빨이 아니라 주사위 눈처럼 보였다.
-// 이빨은 주둥이 이미지에 함께 그려져 있어야 한 덩어리로 읽힌다 (design-spec-3d.md 5-2).
+// 파츠를 따로 붙이지 않는다.
+// 볏·뿔·주둥이를 각각 얹으면 얼굴 위에 스티커 세 장이 떠 있는 것처럼 읽혔다.
+// 입이 뚫린 공룡 얼굴 한 장으로 감싸면, 아이 얼굴이 공룡 입 안에 들어간
+// 한 덩어리 그림이 된다 (design-spec-3d.md 5-2의 "한 덩어리로 읽힌다"와 같은 이유).
+// 이빨도 이 한 장에 이미 그려져 있다.
+const FRAME = 'dino-frame';
 
-/**
- * 파츠 배치표. 길이 단위는 전부 "얼굴폭 = 1.0"이다.
- * 카메라에서 멀어져도 같은 비율로 붙게 하려면 픽셀이 아니라 얼굴폭 기준이어야 한다.
- *
- * anchor: 이 랜드마크 위에 놓는다 (없으면 미간 기준 로컬 좌표)
- * w: 파츠의 가로 폭
- * dx, dy: 앵커에서 밀어낼 거리 (+y가 아래)
- * bounce: 양치 중일 때 통통 튀는 진폭
- */
-const PARTS = [
-  // 뿔은 관자놀이 옆에 둔다. 위로 올리면 볏의 바깥 판과 겹쳐서 지저분해진다.
-  { art: 'dino-horn-l', w: 0.44, dx: -0.58, dy: -0.08, bounce: 0.03 },
-  { art: 'dino-horn-r', w: 0.44, dx: 0.58, dy: -0.08, bounce: 0.03 },
-  { art: 'dino-crest', anchor: FOREHEAD, w: 1.5, dx: 0, dy: -0.06, bounce: 0.055 },
-  // 주둥이가 공룡으로 읽히게 하는 부위다. 코만 덮으면 사람 얼굴에 스티커를 붙인 꼴이 된다.
-  // 코부터 윗입술까지 함께 가려야 한다.
-  { art: 'dino-snout', anchor: NOSE_TIP, w: 0.86, dx: 0, dy: 0.15, bounce: 0.02 },
-];
+// 프레임 이미지 안에서 "입 구멍"이 차지하는 위치·크기. 값은 이미지 폭/높이의 비율이다.
+// 이미지를 새로 그리면 여기만 다시 재면 된다.
+const HOLE_CX = 0.5;
+const HOLE_CY = 0.63;
+const HOLE_W = 0.66;
+
+// 입 구멍이 얼굴폭의 몇 배인가. 1.0이면 얼굴이 구멍에 꽉 껴서 이빨이 볼을 파고든다.
+// 반대로 키우면 공룡 머리가 화면을 다 먹는다. 1.5는 컸다.
+const FIT = 1.3;
 
 /** 픽셀 공간에서 얼굴의 중심·크기·기울기를 뽑는다. */
 function faceFrame(lm, W, H) {
@@ -43,8 +36,9 @@ function faceFrame(lm, W, H) {
   const rx = lm[TEMPLE_R].x * W;
   const ry = lm[TEMPLE_R].y * H;
   return {
-    cx: lm[BROW_MID].x * W,
-    cy: lm[BROW_MID].y * H,
+    // 프레임의 중심은 미간이 아니라 얼굴 한가운데다. 이마~턱의 중점을 쓴다.
+    cx: ((lm[FOREHEAD].x + lm[CHIN].x) / 2) * W,
+    cy: ((lm[FOREHEAD].y + lm[CHIN].y) / 2) * H,
     size: Math.hypot(rx - lx, ry - ly),
     angle: Math.atan2(ry - ly, rx - lx),
   };
@@ -66,35 +60,18 @@ export function createFilter(art) {
       const f = faceFrame(lm, W, H);
       const bob = Math.sin(t / 105) * cheer;
 
-      for (const p of PARTS) {
-        const img = art[p.art];
-        if (!img) continue;
-
-        // 앵커가 있으면 그 랜드마크 위에, 없으면 미간에서 회전 오프셋만큼 떨어진 곳에.
-        let ax;
-        let ay;
-        if (p.anchor !== undefined) {
-          ax = lm[p.anchor].x * W;
-          ay = lm[p.anchor].y * H;
-        } else {
-          ax = f.cx;
-          ay = f.cy;
-        }
-
-        const lift = (p.bounce ?? 0) * bob;
-        const w = f.size * p.w * (1 + lift * 0.5);
+      const img = art[FRAME];
+      if (img) {
+        // 닦는 동안 공룡 머리가 살짝 커졌다 작아진다. 얼굴은 그대로인데 프레임만 숨쉰다.
+        const lift = 0.035 * bob;
+        const w = (f.size * FIT * (1 + lift)) / HOLE_W;
         const h = w * (img.height / img.width);
 
         ctx.save();
-        ctx.translate(ax, ay);
+        ctx.translate(f.cx, f.cy);
         ctx.rotate(f.angle);
-        ctx.drawImage(
-          img,
-          -w / 2 + p.dx * f.size,
-          -h / 2 + (p.dy - lift) * f.size,
-          w,
-          h,
-        );
+        // 구멍의 중심이 얼굴 중심에 오도록 이미지를 민다.
+        ctx.drawImage(img, -HOLE_CX * w, -HOLE_CY * h - lift * f.size, w, h);
         ctx.restore();
       }
 
