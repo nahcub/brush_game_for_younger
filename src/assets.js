@@ -5,7 +5,6 @@ const NAMES = [
   'dino-frame', // 입이 뚫린 공룡 얼굴 한 장. 파츠(볏/뿔/주둥이)를 대체한다.
   'bubble',
   'sparkle',
-  'mascot',
   'box-closed',
   'box-open',
 ];

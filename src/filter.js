@@ -60,20 +60,17 @@ export function createFilter(art) {
     draw(ctx, lm, W, H) {
       if (!lm) return;
       const f = faceFrame(lm, W, H);
-      const bob = Math.sin(t / 105) * cheer;
 
       const img = art[FRAME];
       if (img) {
-        // 닦는 동안 공룡 머리가 살짝 커졌다 작아진다. 얼굴은 그대로인데 프레임만 숨쉰다.
-        const lift = 0.035 * bob;
-        const w = (f.size * FIT * (1 + lift)) / HOLE_W;
+        const w = (f.size * FIT) / HOLE_W;
         const h = w * (img.height / img.width);
 
         ctx.save();
         ctx.translate(f.cx, f.cy);
         ctx.rotate(f.angle);
         // 구멍의 중심이 얼굴 중심에 오도록 이미지를 민다.
-        ctx.drawImage(img, -HOLE_CX * w, -HOLE_CY * h - lift * f.size, w, h);
+        ctx.drawImage(img, -HOLE_CX * w, -HOLE_CY * h, w, h);
         ctx.restore();
       }
 

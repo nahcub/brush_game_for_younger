@@ -108,10 +108,27 @@ body {
   animation: fade-in 0.35s ease;
 }
 
+/* 시작 화면만 공룡 들판 배경을 깐다. 크림색 판 대신 장면 자체가 무대가 된다. */
+#start {
+  gap: 18px;
+  background: url('/art/background.png') center / cover no-repeat;
+}
+
+#start-title {
+  font-size: clamp(22px, 6vw, 32px);
+  font-weight: 800;
+  color: #ee5540;
+  text-align: center;
+  text-shadow:
+    0 3px 0 #fff6e8,
+    0 6px 14px rgba(20, 60, 90, 0.25);
+}
+
 #start-mascot {
   width: 42%;
   max-width: 220px;
   object-fit: contain;
+  filter: drop-shadow(0 10px 14px rgba(20, 60, 90, 0.3));
   animation: hop 1.5s ease-in-out infinite;
 }
 
