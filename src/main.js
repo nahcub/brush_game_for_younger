@@ -258,7 +258,13 @@ async function main() {
         if (detectFails >= 12 && delegateUsed === 'GPU') swapToCpu();
       }
 
-      ({ brushing, energy } = detector.update(lastResult?.faceLandmarks?.[0] ?? null, now));
+      // 화면 비율을 넘겨야 노트북(가로)과 폰(세로)에서 같은 수치가 나온다.
+      const aspect = canvas.height ? canvas.width / canvas.height : 1;
+      ({ brushing, energy } = detector.update(
+        lastResult?.faceLandmarks?.[0] ?? null,
+        now,
+        aspect,
+      ));
 
       // 프레임 간격을 지수 평활해서 FPS 표시가 튀지 않게 한다.
       fps = fps ? fps * 0.9 + (1000 / (now - lastFrameAt)) * 0.1 : 1000 / (now - lastFrameAt);
