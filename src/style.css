@@ -25,11 +25,22 @@ body {
 
 /* --- 바깥 세계: 하늘과 들판 --- */
 #world {
+  position: relative;
   width: min(880px, 100vw - 20px);
   padding: 12px 16px 18px;
   border-radius: 30px;
   background: linear-gradient(#63bcf0 0%, #4aa8e8 52%, #6cbf3f 52%, #7cc94a 100%);
   box-shadow: 0 12px 40px rgba(20, 60, 90, 0.28);
+}
+
+/* 거품이 카메라 창에서 게이지까지 건너가는 층. 화면 위 모든 것 위에 얹는다. */
+#flow {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 3;
 }
 
 /* --- 상단 게이지 --- */
@@ -93,6 +104,38 @@ body {
   inset: 0;
   pointer-events: none;
   box-shadow: inset 0 0 55px 26px rgba(247, 232, 206, 0.9);
+}
+
+/* --- 멈췄을 때 올라오는 칫솔 ---
+   양치가 5초 넘게 끊기면 아래에서 입 옆으로 슥 올라온다. 멈춘 걸 나무라는 게 아니라
+   "여기다 대"를 손짓으로 보여주는 쪽이라, 빠르게 튀지 않고 천천히 떠오른다.
+   left/top/width는 main.js가 매 프레임 얼굴에 맞춰 넣는다 (transition 걸지 말 것 —
+   얼굴을 따라가는 데 지연이 붙어 칫솔이 뒤늦게 끌려온다).
+   translate(-17%, -20%)는 이미지 안에서 솔 끝이 있는 지점. 그 점이 입에 놓인다.
+   transform-origin도 같은 점이라, 기울여도 솔은 입에 머물고 손잡이만 돌아간다. */
+#nudge-brush {
+  position: absolute;
+  left: 50%;
+  top: 72%;
+  width: 32%;
+  object-fit: contain;
+  pointer-events: none;
+  opacity: 0;
+  transform-origin: 17% 20%;
+  transform: translate(-17%, -20%) translateY(150%) rotate(10deg);
+  filter: drop-shadow(0 8px 12px rgba(20, 60, 90, 0.35));
+  transition:
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.4s ease;
+}
+
+/* 다 올라온 자리는 원 궤도의 12시 지점(-30%)이다. 여기가 nudge-bass의 0% 프레임과
+   같아야 애니메이션이 시작될 때 칫솔이 한 번 튀지 않는다.
+   -10deg는 잇몸선을 향한 45° 각도를 옆모습으로 흉내낸 것. */
+#nudge-brush.up {
+  opacity: 1;
+  transform: translate(-17%, -30%) rotate(-10deg);
+  animation: nudge-bass 1.4s linear 0.7s infinite;
 }
 
 /* --- 시작 / 완료 화면 --- */
@@ -162,6 +205,28 @@ body {
   height: 68px;
   font-size: 32px;
   margin-top: 8px;
+}
+
+/* 소리 버튼은 아이를 부르는 요소가 아니다. 시작 버튼(빨강)과 경쟁하지 않도록
+   채도를 낮추고 크기도 게이지 높이에 맞춰 눌러둔다. */
+.btn--mute {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  font-size: 18px;
+  line-height: 1;
+  background: #f7e8ce;
+  box-shadow: 0 3px 0 #d9c3a1;
+}
+
+.btn--mute:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #d9c3a1;
+}
+
+.btn--mute[aria-pressed='true'] {
+  background: #d8c8ae;
+  box-shadow: 0 3px 0 #b8a486;
 }
 
 /* --- 상자 --- */
@@ -277,5 +342,38 @@ body {
   from {
     transform: scale(0.3) rotate(-18deg);
     opacity: 0;
+  }
+}
+
+/* 바스법(Bass) 시범 동작. 잇몸선에 45°로 대고 제자리에서 작게 원을 그리는 게 핵심이라,
+   좌우로 크게 쓸지 않고 솔 끝을 한 점 주위로 작게 돌린다 — 아이가 보고 따라 할 그림이므로
+   실제로 가르치려는 동작 그대로여야 한다. linear라야 도는 속도가 일정해 원으로 읽힌다. */
+@keyframes nudge-bass {
+  0% {
+    transform: translate(-17%, -30%) rotate(-10deg);
+  }
+  12.5% {
+    transform: translate(-12%, -27%) rotate(-8deg);
+  }
+  25% {
+    transform: translate(-10%, -20%) rotate(-6deg);
+  }
+  37.5% {
+    transform: translate(-12%, -13%) rotate(-8deg);
+  }
+  50% {
+    transform: translate(-17%, -10%) rotate(-10deg);
+  }
+  62.5% {
+    transform: translate(-22%, -13%) rotate(-12deg);
+  }
+  75% {
+    transform: translate(-24%, -20%) rotate(-14deg);
+  }
+  87.5% {
+    transform: translate(-22%, -27%) rotate(-12deg);
+  }
+  100% {
+    transform: translate(-17%, -30%) rotate(-10deg);
   }
 }

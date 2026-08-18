@@ -11,12 +11,20 @@
       <div id="hud">
         <img id="hud-mascot" src="/art/mascot-icon.png" alt="" />
         <div id="gauge"><div id="gauge-fill"></div></div>
+        <!-- 소리 끄기. 아이가 아니라 매장·보호자를 위한 버튼이라 게이지 옆 구석에 작게 둔다 -->
+        <button id="mute" class="btn btn--mute" aria-label="소리 끄기" aria-pressed="false">
+          <span id="mute-icon">🔊</span>
+        </button>
       </div>
 
       <div id="stage">
         <video id="webcam" autoplay playsinline muted></video>
         <canvas id="overlay"></canvas>
         <div id="vignette"></div>
+
+        <!-- 5초 넘게 멈추면 올라오는 칫솔. 글자를 못 읽는 아이에게 "이걸 들고 닦아"를
+             말 대신 보여준다. 평소엔 화면 밖에 숨어 있다. -->
+        <img id="nudge-brush" src="/art/brush.png" alt="" />
 
         <!-- 시작: 글자를 못 읽는 아이에게 마스코트가 "여기 봐"를 대신한다 -->
         <div id="start" class="screen">
@@ -37,6 +45,10 @@
           <button id="restart" class="btn btn--again hidden" aria-label="다시 하기">↻</button>
         </div>
       </div>
+
+      <!-- 입에서 나온 거품이 상단 게이지까지 날아가는 층.
+           #stage는 overflow:hidden이라 카메라 창을 넘지 못한다. 그래서 별도 캔버스다. -->
+      <canvas id="flow"></canvas>
     </main>
 
     <!-- 개발용. 기본은 숨김, D키로 켠다 -->

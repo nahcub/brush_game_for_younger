@@ -53,6 +53,9 @@ management.
   purely cosmetic feedback while `brushing` is true.
 - **`src/lyrics.js`** — rotates a fixed line every `LINE_MS`, but only while brushing is active
   (pausing brushing pauses the lyrics too, so a kid can keep up).
+- **`src/audio.js`** — background music (`public/audio/bgm.mp3`, looped) plus the completion
+  "ding", which is synthesized with WebAudio rather than shipped as a file so pitch/decay stay
+  tunable from constants. **BGM is currently disabled** — see "Background music" below.
 - **`src/rewards.js`** — reward box grading/items. No "nothing" outcome by design (see comments —
   this is a product/ethics constraint for a kids' product, not an oversight to "fix").
 - **`src/main.js`** — loads `FaceLandmarker` from `/wasm` + `/models` (GPU delegate, VIDEO
@@ -60,6 +63,25 @@ management.
   landmarks only when `video.currentTime` advances, feeds them to `brushDetector`, updates
   `game`/`effects`/`lyrics`, and renders overlay canvas + DOM status/gauge/debug text. Press `D` to
   toggle landmark dot rendering (on by default for tuning; turn off for kid-facing demos).
+
+### Background music (currently OFF)
+
+`BGM_ENABLED` at the top of `src/audio.js` is set to `false` because the same loop playing on every
+dev reload gets old fast. While it's `false` the mp3 isn't even given to the `<audio>` element, so
+no 1.4MB fetch happens. **Set it back to `true` before any demo or deployment** — the landing
+screen is meant to be audibly "on" so a passing kid stops walking.
+
+- Permanent switch: `const BGM_ENABLED = true;` in `src/audio.js`.
+- One-off, no code change: append `?bgm=1` to the URL (`?bgm=0` forces it off). The query param
+  wins over the constant.
+
+The completion ding is *not* covered by this flag — it's one short sound and stays on. The 🔊
+button in the HUD mutes both, and persists to `localStorage` under `brush-game.muted`.
+
+Browsers block autoplay without a user gesture, so `audio.arm()` tries to play on load and, if
+refused, retries on the first `pointerdown`/`touchstart`/`keydown` anywhere on the page. For a
+kiosk that must have sound before anyone touches it, launch Chrome with
+`--autoplay-policy=no-user-gesture-required`.
 
 ### Key invariants to preserve when changing detection/game logic
 
