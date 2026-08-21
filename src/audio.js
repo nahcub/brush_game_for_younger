@@ -22,6 +22,14 @@ const DING_PARTIALS = [
   { freq: 2637.0, gain: 0.09 }, // E7
 ];
 const DING_SEC = 1.6; // 여운. 짧으면 "딱"이 되고 길면 질질 끌린다
+
+// 칸이 넘어갈 때의 "띠링". 완료음과는 확실히 달라야 한다 — 아이가 이 소리를 끝난 걸로
+// 알아들으면 세 번이나 헛되이 그만둔다. 그래서 짧게 두 음 올려치고 바로 끝낸다.
+const CHEER_NOTES = [
+  { freq: 880.0, at: 0.0 }, // A5
+  { freq: 1318.5, at: 0.09 }, // E6
+];
+const CHEER_SEC = 0.22;
 const MUTE_KEY = 'brush-game.muted';
 const BGM_FADE_MS = 700; // 완료 시 배경음을 이만큼 걸쳐 줄인다 — 띵이 들릴 자리를 비운다
 
@@ -158,6 +166,28 @@ export function createAudio() {
         // 저장 못 해도 이번 세션에는 적용된다
       }
       return muted;
+    },
+
+    /** 칸 전환음. 마스코트가 뛰어오르는 순간에 같이 친다. */
+    cheer() {
+      if (!ctx || muted) return;
+      const t0 = ctx.currentTime + 0.02;
+
+      for (const { freq, at } of CHEER_NOTES) {
+        const osc = ctx.createOscillator();
+        const amp = ctx.createGain();
+        osc.type = 'triangle'; // 사인보다 배음이 있어 배경음 위로 튄다
+        osc.frequency.value = freq;
+
+        const t = t0 + at;
+        amp.gain.setValueAtTime(0.0001, t);
+        amp.gain.exponentialRampToValueAtTime(0.22, t + 0.01);
+        amp.gain.exponentialRampToValueAtTime(0.0001, t + CHEER_SEC);
+
+        osc.connect(amp).connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + CHEER_SEC + 0.05);
+      }
     },
 
     /** 완료음. */

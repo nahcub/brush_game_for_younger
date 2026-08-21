@@ -22,9 +22,14 @@
         <canvas id="overlay"></canvas>
         <div id="vignette"></div>
 
-        <!-- 5초 넘게 멈추면 올라오는 칫솔. 글자를 못 읽는 아이에게 "이걸 들고 닦아"를
-             말 대신 보여준다. 평소엔 화면 밖에 숨어 있다. -->
+        <!-- "여기를 닦아"를 말 대신 위치로 지시하는 칫솔. 화면은 거울이라 보이는 자리에
+             손을 대면 그게 맞는 쪽이다 — 좌우를 말로 시키면 아이는 반대로 간다.
+             네 칸을 도는 동안 입 주위 네 자리로 옮겨 다니며 상하좌우로 뒤집힌다. -->
         <img id="nudge-brush" src="/art/brush.png" alt="" />
+
+        <!-- 칸이 넘어갈 때 아래에서 점프해 올라오는 마스코트. 칫솔이 다른 자리로 옮겨간 걸
+             아이가 놓치지 않도록 시선을 한 번 끊어준다. -->
+        <img id="cheer" src="/art/mascot-cheer.png" alt="" />
 
         <!-- 시작: 글자를 못 읽는 아이에게 마스코트가 "여기 봐"를 대신한다 -->
         <div id="start" class="screen">
@@ -56,6 +61,7 @@
       <span id="status">대기 중</span>
       <span id="brush-status">멈춤</span>
       <span id="gauge-time">0:00 / 0:20</span>
+      <span id="quadrant">칸 1/4</span>
       <span id="debug">움직임: — · 판정: — · FPS: —</span>
     </div>
 

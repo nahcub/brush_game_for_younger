@@ -49,6 +49,11 @@ management.
 - **`src/game.js`** — progress gauge / timer state machine. Time only accumulates while
   `brushing` is true (`DURATION_MS`); tracks `longestPause` to grade the reward box on completion
   (uninterrupted run → gold, otherwise silver — see `gradeFor`). No fail state, no losing.
+  The run is split into `QUADRANT_COUNT` (4) mouth quadrants of `QUADRANT_MS` each: `progress`
+  is progress *within the current quadrant*, so the gauge fills and resets four times rather
+  than filling once. `quadrant` (0–3) is what `main.js` watches to move the brush and fire the
+  mascot. Quadrant advance is purely time-based — the detector cannot tell which quadrant is
+  being brushed, and deliberately doesn't try (see the binary-judgement invariant below).
 - **`src/effects.js`** — particle system (bubbles/stars) spawned from the lip-ring landmarks,
   purely cosmetic feedback while `brushing` is true.
 - **`src/lyrics.js`** — rotates a fixed line every `LINE_MS`, but only while brushing is active
@@ -63,6 +68,8 @@ management.
   landmarks only when `video.currentTime` advances, feeds them to `brushDetector`, updates
   `game`/`effects`/`lyrics`, and renders overlay canvas + DOM status/gauge/debug text. Press `D` to
   toggle landmark dot rendering (on by default for tuning; turn off for kid-facing demos).
+  Also owns `QUADRANTS` — the four brush positions around the mouth (offset as a multiple of face
+  width, plus x/y image flips fed to CSS as `--fx`/`--fy`). See "Telling a kid where to brush".
 
 ### Background music (currently OFF)
 
@@ -82,6 +89,30 @@ Browsers block autoplay without a user gesture, so `audio.arm()` tries to play o
 refused, retries on the first `pointerdown`/`touchstart`/`keydown` anywhere on the page. For a
 kiosk that must have sound before anyone touches it, launch Chrome with
 `--autoplay-policy=no-user-gesture-required`.
+
+### Telling a kid where to brush
+
+Which quadrant to brush is communicated **only by where the toothbrush appears on screen** —
+never in words. The video is mirrored (`scaleX(-1)`, and `videoPointToStage` flips x to match),
+so the screen behaves like a mirror: the child puts their hand where they see the brush and lands
+on the right side of their own mouth. Say "오른쪽" out loud instead and they go the other way,
+because the face they're looking at is reversed. 4–7 year olds also don't have stable left/right
+yet, which is the second reason not to use the words.
+
+Consequences to keep in mind:
+
+- Don't add left/right wording to lyrics, labels, or voice lines. Up/down is safe (no mirroring)
+  and body-relative wording ("볼 쪽", "앞니") is safe. `src/lyrics.js` follows this.
+- The brush is **on-screen for the whole run** (`.shown`, dimmed), not just when the child stops.
+  It's an instruction now, not a nag. It goes fully opaque (`.up`, with the Bass-method circling
+  animation) for `NUDGE_HOLD_MS` after each quadrant change, and again after `NUDGE_AFTER_MS`
+  of no brushing.
+- `mascot-cheer` jumps up from the bottom on each quadrant change to break the child's gaze so
+  they notice the brush moved. It must not pause the gauge — congratulating a kid into stopping
+  is worse than no transition at all.
+- The brush image's bristle tip is the anchor (`transform-origin: 17% 20%`), so the flips leave
+  the tip glued to the target point. Base art (handle lower-right) reads as *upper* teeth; `fy: -1`
+  puts the handle above and reads as *lower* teeth.
 
 ### Key invariants to preserve when changing detection/game logic
 

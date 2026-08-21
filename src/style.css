@@ -106,14 +106,21 @@ body {
   box-shadow: inset 0 0 55px 26px rgba(247, 232, 206, 0.9);
 }
 
-/* --- 멈췄을 때 올라오는 칫솔 ---
-   양치가 5초 넘게 끊기면 아래에서 입 옆으로 슥 올라온다. 멈춘 걸 나무라는 게 아니라
-   "여기다 대"를 손짓으로 보여주는 쪽이라, 빠르게 튀지 않고 천천히 떠오른다.
+/* --- 어디를 닦을지 짚어주는 칫솔 ---
+   게임 중에는 입 주위 네 자리 중 지금 닦을 자리에 계속 떠 있고, 칸이 넘어가면 다음
+   자리로 미끄러져 간다. 말로 "오른쪽"이라고 하면 거울 때문에 아이가 반대로 가므로,
+   위치와 방향으로만 지시한다.
    left/top/width는 main.js가 매 프레임 얼굴에 맞춰 넣는다 (transition 걸지 말 것 —
    얼굴을 따라가는 데 지연이 붙어 칫솔이 뒤늦게 끌려온다).
    translate(-17%, -20%)는 이미지 안에서 솔 끝이 있는 지점. 그 점이 입에 놓인다.
    transform-origin도 같은 점이라, 기울여도 솔은 입에 머물고 손잡이만 돌아간다. */
+/* --fx/--fy는 칸에 따라 JS가 넣는 좌우·상하 반전이다(main.js QUADRANTS).
+   transform-origin이 솔 끝이라 어떻게 뒤집어도 솔 끝은 지정한 좌표에 그대로 붙어 있고,
+   퍼센트 translate는 스케일 바깥에서 계산되므로 반전돼도 화면상 방향이 뒤집히지 않는다.
+   회전은 스케일 안쪽이라 좌우 반전 시 각도도 알아서 거울처럼 따라간다. */
 #nudge-brush {
+  --fx: 1;
+  --fy: 1;
   position: absolute;
   left: 50%;
   top: 72%;
@@ -122,20 +129,45 @@ body {
   pointer-events: none;
   opacity: 0;
   transform-origin: 17% 20%;
-  transform: translate(-17%, -20%) translateY(150%) rotate(10deg);
+  transform: translate(-17%, -20%) translateY(150%) scale(var(--fx), var(--fy)) rotate(10deg);
   filter: drop-shadow(0 8px 12px rgba(20, 60, 90, 0.35));
   transition:
     transform 0.7s cubic-bezier(0.22, 1, 0.36, 1),
     opacity 0.4s ease;
 }
 
+/* 칫솔은 이제 "재촉"이 아니라 "어디를 닦으라"는 지시다. 그래서 게임 중에는 계속 떠
+   있어야 한다. 다만 늘 진하게 두면 얼굴을 가리므로, 평소엔 옅게 자리만 지킨다. */
+#nudge-brush.shown {
+  opacity: 0.42;
+  transform: translate(-17%, -30%) scale(var(--fx), var(--fy)) rotate(-10deg);
+}
+
 /* 다 올라온 자리는 원 궤도의 12시 지점(-30%)이다. 여기가 nudge-bass의 0% 프레임과
    같아야 애니메이션이 시작될 때 칫솔이 한 번 튀지 않는다.
    -10deg는 잇몸선을 향한 45° 각도를 옆모습으로 흉내낸 것. */
-#nudge-brush.up {
+#nudge-brush.shown.up {
   opacity: 1;
-  transform: translate(-17%, -30%) rotate(-10deg);
-  animation: nudge-bass 1.4s linear 0.7s infinite;
+  animation: nudge-bass 1.4s linear infinite;
+}
+
+/* 칸이 바뀔 때 아래에서 튀어 오르는 마스코트. 화면 한가운데를 오래 가리면 정작
+   닦는 걸 방해하므로, 한 번 뛰고 바로 내려간다. 게이지는 그동안에도 계속 찬다. */
+#cheer {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 34%;
+  max-width: 190px;
+  object-fit: contain;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 120%);
+  filter: drop-shadow(0 10px 14px rgba(20, 60, 90, 0.3));
+}
+
+#cheer.jump {
+  animation: cheer-jump 1.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* --- 시작 / 완료 화면 --- */
@@ -348,32 +380,60 @@ body {
 /* 바스법(Bass) 시범 동작. 잇몸선에 45°로 대고 제자리에서 작게 원을 그리는 게 핵심이라,
    좌우로 크게 쓸지 않고 솔 끝을 한 점 주위로 작게 돌린다 — 아이가 보고 따라 할 그림이므로
    실제로 가르치려는 동작 그대로여야 한다. linear라야 도는 속도가 일정해 원으로 읽힌다. */
-@keyframes nudge-bass {
+/* 아래에서 한 번 뛰어올랐다가 살짝 튕기고 도로 내려간다. */
+@keyframes cheer-jump {
   0% {
-    transform: translate(-17%, -30%) rotate(-10deg);
+    transform: translate(-50%, 120%) rotate(-8deg);
+    opacity: 0;
   }
-  12.5% {
-    transform: translate(-12%, -27%) rotate(-8deg);
+  18% {
+    transform: translate(-50%, -8%) rotate(5deg);
+    opacity: 1;
   }
-  25% {
-    transform: translate(-10%, -20%) rotate(-6deg);
+  30% {
+    transform: translate(-50%, 8%) rotate(-4deg);
+    opacity: 1;
   }
-  37.5% {
-    transform: translate(-12%, -13%) rotate(-8deg);
+  42% {
+    transform: translate(-50%, 0%) rotate(2deg);
+    opacity: 1;
   }
-  50% {
-    transform: translate(-17%, -10%) rotate(-10deg);
-  }
-  62.5% {
-    transform: translate(-22%, -13%) rotate(-12deg);
-  }
-  75% {
-    transform: translate(-24%, -20%) rotate(-14deg);
-  }
-  87.5% {
-    transform: translate(-22%, -27%) rotate(-12deg);
+  72% {
+    transform: translate(-50%, 0%) rotate(-2deg);
+    opacity: 1;
   }
   100% {
-    transform: translate(-17%, -30%) rotate(-10deg);
+    transform: translate(-50%, 120%) rotate(8deg);
+    opacity: 0;
+  }
+}
+
+@keyframes nudge-bass {
+  0% {
+    transform: translate(-17%, -30%) scale(var(--fx), var(--fy)) rotate(-10deg);
+  }
+  12.5% {
+    transform: translate(-12%, -27%) scale(var(--fx), var(--fy)) rotate(-8deg);
+  }
+  25% {
+    transform: translate(-10%, -20%) scale(var(--fx), var(--fy)) rotate(-6deg);
+  }
+  37.5% {
+    transform: translate(-12%, -13%) scale(var(--fx), var(--fy)) rotate(-8deg);
+  }
+  50% {
+    transform: translate(-17%, -10%) scale(var(--fx), var(--fy)) rotate(-10deg);
+  }
+  62.5% {
+    transform: translate(-22%, -13%) scale(var(--fx), var(--fy)) rotate(-12deg);
+  }
+  75% {
+    transform: translate(-24%, -20%) scale(var(--fx), var(--fy)) rotate(-14deg);
+  }
+  87.5% {
+    transform: translate(-22%, -27%) scale(var(--fx), var(--fy)) rotate(-12deg);
+  }
+  100% {
+    transform: translate(-17%, -30%) scale(var(--fx), var(--fy)) rotate(-10deg);
   }
 }

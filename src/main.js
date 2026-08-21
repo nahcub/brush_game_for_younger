@@ -4,7 +4,7 @@ import { createAudio } from './audio.js';
 import { createBrushDetector, BRUSH_THRESHOLD } from './brushDetector.js';
 import { createEffects } from './effects.js';
 import { createFilter } from './filter.js';
-import { createGame, DURATION_MS } from './game.js';
+import { createGame, DURATION_MS, QUADRANT_COUNT } from './game.js';
 import { pickItem } from './rewards.js';
 
 const $ = (id) => document.getElementById(id);
@@ -58,15 +58,43 @@ const itemEmojiEl = $('item-emoji');
 const itemNameEl = $('item-name');
 const restartBtn = $('restart');
 const nudgeBrush = $('nudge-brush');
+const cheerEl = $('cheer');
 
-// 멈춘 지 이만큼 지나면 칫솔이 올라온다. 짧으면 잠깐 숨 고르는 것까지 잔소리가 되고,
+// 멈춘 지 이만큼 지나면 칫솔이 다시 진해진다. 짧으면 잠깐 숨 고르는 것까지 잔소리가 되고,
 // 길면 아이가 이미 딴짓으로 넘어간 뒤다.
 const NUDGE_AFTER_MS = 5000;
+
+// 칸이 바뀐 직후엔 멈추지 않았어도 이만큼 칫솔을 진하게 띄운다. "자리가 옮겨졌다"는
+// 사실 자체를 알려야 하는 구간이라, 아이가 닦고 있든 아니든 한 번은 보여준다.
+const NUDGE_HOLD_MS = 3500;
+
+// 입 주위 네 자리. 화면은 거울이므로 여기 x 부호가 곧 아이 몸 기준의 좌우와 같다
+// (화면 오른쪽에 뜨면 아이는 자기 오른쪽 볼에 손을 댄다). 덕분에 좌우를 말로 부르지
+// 않고 위치로만 지시할 수 있다 — 말로 "오른쪽"이라고 하면 아이는 거울 때문에 반대로 간다.
+//
+// dx/dy는 얼굴 폭 배수, fx/fy는 칫솔 이미지의 좌우·상하 반전.
+// 원본 칫솔은 솔 끝이 왼쪽 위, 손잡이가 오른쪽 아래 — 아래에서 위를 향해 대는 그림이라
+// 윗니용이다. fy를 뒤집으면 손잡이가 위로 가서 아랫니를 향하는 그림이 된다.
+// 회전각은 CSS에서 스케일 안쪽에 있어 반전과 함께 거울처럼 따라간다.
+//
+// 순서는 매번 고정한다. 습관으로 굳는 게 목적이라 순서가 뭔지보다 안 바뀌는 게 중요하다.
+//
+// 숫자는 웹캠으로 보면서 맞춘 값이라 좌우가 입 중심 기준으로 대칭이 아니다. 기준점이
+// 입술 중앙(랜드마크 13)인데 칫솔 솔 머리는 솔 끝보다 오른쪽으로 퍼져 있어서, 그대로
+// 대칭으로 놓으면 네 자리가 통째로 오른쪽으로 밀려 보인다. 그만큼(-0.08) 빼둔 상태.
+// 다시 만질 때는 화면을 보면서 "솔 머리가 그 칸의 이에 얹혀 보이는가"로 판단할 것.
+const QUADRANTS = [
+  { dx: 0.14, dy: -0.24, fx: 1, fy: 1 }, // 오른쪽 위
+  { dx: 0.14, dy: 0.16, fx: 1, fy: -1 }, // 오른쪽 아래
+  { dx: -0.3, dy: 0.16, fx: -1, fy: -1 }, // 왼쪽 아래
+  { dx: -0.3, dy: -0.24, fx: -1, fy: 1 }, // 왼쪽 위
+];
 
 const devEl = $('dev');
 const statusEl = $('status');
 const brushEl = $('brush-status');
 const gaugeTime = $('gauge-time');
+const quadrantEl = $('quadrant');
 const debugEl = $('debug');
 
 // 아이한테 보여줄 땐 개발 정보가 방해된다. 기본은 숨김.
@@ -267,11 +295,21 @@ async function main() {
 
   // 칫솔은 화면 아래가 아니라 입 옆으로 올라온다. 아래에 떠 있으면 "저기 칫솔이 있네"로
   // 끝나지만, 입 옆에 오면 "여기다 대"가 된다. 솔 끝(이미지의 왼쪽 위)을 입에 맞춘다.
+  // 어느 옆인지는 지금 칸(QUADRANTS)이 정한다.
   let nudgeX = null;
   let nudgeY = null;
   let nudgeW = null;
+  let nudgeFlip = ''; // 같은 값을 매 프레임 다시 쓰지 않으려고 마지막 값을 들고 있는다
 
-  function placeNudge(landmarks, snap) {
+  function placeNudge(landmarks, quadrant, snap) {
+    const q = QUADRANTS[quadrant] ?? QUADRANTS[0];
+    const flip = `${q.fx},${q.fy}`;
+    if (flip !== nudgeFlip) {
+      nudgeFlip = flip;
+      nudgeBrush.style.setProperty('--fx', String(q.fx));
+      nudgeBrush.style.setProperty('--fy', String(q.fy));
+    }
+
     const stage = stageEl.getBoundingClientRect();
     // 얼굴을 못 찾는 동안엔 아래 가운데. 어디에 대라고 짚어줄 수가 없으니 그냥 보여만 준다.
     let tx = stage.width / 2;
@@ -287,9 +325,9 @@ async function main() {
       const b = videoPointToStage(cheekR.x, cheekR.y);
       if (m && a && b) {
         const faceW = Math.hypot(b.x - a.x, b.y - a.y);
-        // 입 정중앙에 얹으면 얼굴을 가린다. 볼 쪽으로 살짝 비켜 세운다.
-        tx = m.x + faceW * 0.18;
-        ty = m.y + faceW * 0.04;
+        // 입 정중앙에 얹으면 얼굴을 가린다. 지금 닦을 칸 쪽으로 비켜 세운다.
+        tx = m.x + faceW * q.dx;
+        ty = m.y + faceW * q.dy;
         tw = faceW * 1.25;
       }
     }
@@ -304,6 +342,18 @@ async function main() {
     nudgeBrush.style.top = `${nudgeY}px`;
     nudgeBrush.style.width = `${nudgeW}px`;
   }
+
+  // 칸이 넘어갈 때 마스코트가 아래에서 한 번 뛴다. 칫솔이 다른 자리로 옮겨간 걸
+  // 아이가 놓치면 그 칸을 통째로 헛닦게 되므로, 시선을 한 번 끊어주는 게 목적이다.
+  // 게이지는 이 동안에도 계속 찬다 — 축하한다고 닦는 걸 멈추게 만들면 안 된다.
+  function cheerJump() {
+    audio.cheer();
+    cheerEl.classList.remove('jump');
+    void cheerEl.offsetWidth; // 리플로우를 강제해야 같은 애니메이션이 다시 돈다
+    cheerEl.classList.add('jump');
+  }
+
+  cheerEl.addEventListener('animationend', () => cheerEl.classList.remove('jump'));
 
   const detector = createBrushDetector();
   const filter = createFilter(art);
@@ -368,7 +418,9 @@ async function main() {
     audio.restartBgm();
     game.reset();
     idleMs = 0;
+    sinceQuadrantMs = 0;
     nudgeX = nudgeY = nudgeW = null;
+    cheerEl.classList.remove('jump');
     effects.clear();
     completeEl.classList.add('hidden');
     showLanding();
@@ -384,7 +436,8 @@ async function main() {
   let brushing = false;
   let energy = 0;
   let handNear = false;
-  let idleMs = 0; // 양치가 끊긴 시간. 칫솔을 올릴지 판단하는 데만 쓴다
+  let idleMs = 0; // 양치가 끊긴 시간. 칫솔을 진하게 할지 판단하는 데만 쓴다
+  let sinceQuadrantMs = 0; // 지금 칸으로 넘어온 뒤 흐른 시간. 칫솔 강조 구간을 잰다
 
   let reportedError = false;
   let detectFails = 0;
@@ -477,6 +530,7 @@ async function main() {
 
     const landmarks = lastResult?.faceLandmarks?.[0];
     const wasDone = game.done;
+    const wasQuadrant = game.quadrant;
     const active = !game.done && brushing;
 
     game.update(brushing, dtMs, now);
@@ -486,17 +540,28 @@ async function main() {
     const from = active && mouth ? videoPointToWorld(mouth.x, mouth.y) : null;
     effects.update(landmarks, active, dtMs, from ? { from, to: gaugeEdgeInWorld() } : null);
 
-    if (!wasDone && game.done) showComplete();
+    if (!wasDone && game.done) {
+      showComplete();
+    } else if (game.quadrant !== wasQuadrant) {
+      // 마지막 칸이 다 차면 quadrant는 그대로 두고 done만 서므로 여기 걸리지 않는다.
+      sinceQuadrantMs = 0;
+      cheerJump();
+    }
 
-    // 랜딩·완료 화면에서는 세지 않는다. 시작 버튼을 누르자마자 칫솔이 튀어나오면
-    // 재촉이 아니라 방해가 된다.
+    // 랜딩·완료 화면에서는 세지 않는다. 반대로 게임이 시작되는 순간 sinceQuadrantMs가
+    // 0이라 첫 칸 위치가 곧바로 강조된다 — 어디부터 닦는지는 처음에 알려줘야 한다.
     const playing = !game.done && startEl.classList.contains('hidden');
     idleMs = playing && !brushing ? idleMs + dtMs : 0;
+    sinceQuadrantMs = playing ? sinceQuadrantMs + dtMs : 0;
 
-    // 올라와 있는 동안만 따라다닌다. 숨어 있을 때 위치를 미리 잡아둬야
-    // 나타나는 순간 엉뚱한 자리에서 미끄러져 오지 않는다.
-    const nudgeUp = idleMs >= NUDGE_AFTER_MS;
-    if (playing) placeNudge(landmarks, !nudgeUp);
+    // 칫솔은 게임 내내 떠 있다 — 이건 재촉이 아니라 "어디를 닦아라"는 지시다.
+    // 진해지는 건 두 경우뿐: 칸이 막 바뀌었을 때, 그리고 한참 멈춰 있을 때.
+    const nudgeUp = playing && (sinceQuadrantMs < NUDGE_HOLD_MS || idleMs >= NUDGE_AFTER_MS);
+    // 화면 밖에 있는 동안 위치를 미리 잡아둬야 나타나는 순간 엉뚱한 자리에서
+    // 미끄러져 오지 않는다. 반대로 떠 있는 동안은 부드럽게 다음 칸으로 건너가야 하므로,
+    // 아이 눈이 칫솔을 따라갈 수 있게 스냅하지 않는다.
+    placeNudge(landmarks, game.quadrant, !playing);
+    nudgeBrush.classList.toggle('shown', playing);
     nudgeBrush.classList.toggle('up', nudgeUp);
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -510,6 +575,7 @@ async function main() {
 
     if (!devEl.classList.contains('hidden') && !reportedError) {
       gaugeTime.textContent = `${formatTime(game.elapsedMs)} / ${formatTime(DURATION_MS)}`;
+      quadrantEl.textContent = `칸 ${game.quadrant + 1}/${QUADRANT_COUNT}`;
       setStatus(statusEl, landmarks ? '얼굴 인식됨' : '얼굴 안 보임', Boolean(landmarks));
       setStatus(brushEl, brushing ? '양치 중' : '멈춤', brushing);
       debugEl.textContent =
