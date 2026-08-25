@@ -72,6 +72,26 @@ management.
   Also owns `QUADRANTS` — the four brush positions around the mouth (offset as a multiple of face
   width, plus x/y image flips fed to CSS as `--fx`/`--fy`). See "Telling a kid where to brush".
 
+### Fitting one screen (no scrolling)
+
+The whole game must sit inside one viewport — `body` centers `#world` with flex, so anything that
+overflows is clipped symmetrically at top *and* bottom with no way to scroll to it. The first thing
+lost is the top gauge bar, which is the one piece of feedback the child is watching.
+
+`#world` is a flex column capped at `100dvh`; `#hud` is `flex: none` and `#stage` is `flex: 0 1 auto`
+with `min-height: 0`. So the camera window is the only thing that gives. Its `aspect-ratio: 4 / 3`
+is a **maximum** height, not a fixed ratio — on a short landscape screen (iPad in Safari) it squeezes
+flatter, keeping its width and cropping more off the top and bottom. The face is centered, so that
+crop costs less than shrinking the whole window would.
+
+Don't reintroduce a hardcoded "chrome height" constant to compute the stage size — that was the
+previous approach and it silently re-clipped the gauge whenever HUD padding or the mascot size
+changed. Let flex measure it.
+
+Detection is unaffected: the `aspect` passed to `brushDetector` is the *video's* ratio
+(`canvas.width / canvas.height`), not the stage's, and `videoPointToStage()` re-derives the
+`object-fit: cover` mapping from live `getBoundingClientRect()` values every frame.
+
 ### Background music (ON)
 
 `BGM_ENABLED` at the top of `src/audio.js` is `true` — that is the correct state for any demo or

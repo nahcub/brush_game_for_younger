@@ -26,36 +26,28 @@ body {
 }
 
 /* --- 바깥 세계: 하늘과 들판 ---
-   폭만 보고 크기를 정하면 아이패드처럼 가로로 눋힌(세로가 짧은) 화면에서 카메라 창이
-   뷰포트를 넘어간다. body가 flex 중앙 정렬이라 넘친 부분은 위아래로 똑같이 잘리고
-   스크롤도 안 된다 — 게이지도 시작 버튼도 화면 밖으로 사라진다.
-   그래서 남는 높이에 4:3 카메라 창이 들어가도록 #world 폭을 높이에서 거꾸로 계산한다.
-   --chrome-h가 실제 HUD+패딩과 어긋나면 다시 잘리므로, HUD 높이(--mascot)나
-   #world 상하 패딩을 건드리면 여기도 같이 맞춰야 한다. */
+   폭만 보고 크기를 정하면 아이패드처럼 가로로 눋힌(세로가 짧은) 화면에서 4:3 카메라
+   창이 뷰포트를 넘어간다. body가 flex 중앙 정렬이라 넘친 분은 위아래로 똑같이 잘리고
+   스크롤도 안 된다 — 상단 게이지가 통째로 사라진다.
+   해결은 세로 플렉스다. #world를 뷰포트 높이로 묶어두고, HUD는 줄어들지 않게(flex:none)
+   카메라 창만 남는 높이만큼 줄어들게 한다. HUD 높이를 숫자로 짐작하지 않으므로
+   마스코트나 패딩을 나중에 건드려도 게이지가 다시 잘리는 일은 없다. */
 #world {
   --mascot: 46px;
-  --pad-x: 16px;
-  --hud-h: calc(var(--mascot) + 12px); /* 마스코트 + #hud 아래 패딩 */
-  --chrome-h: calc(var(--hud-h) + 12px + 18px + 12px); /* HUD + 상하 패딩 + 여유 */
-  --fit-w: calc((100vh - var(--chrome-h)) * 4 / 3 + var(--pad-x) * 2);
   position: relative;
-  width: min(880px, 100vw - 20px, var(--fit-w));
-  padding: 12px var(--pad-x) 18px;
+  display: flex;
+  flex-direction: column;
+  width: min(880px, 100vw - 20px);
+  max-height: calc(100vh - 12px);
+  max-height: calc(100dvh - 12px); /* 주소창이 여닫히는 모바일은 100vh가 과대평가라 dvh가 맞다 */
+  padding: 12px 16px 18px;
   border-radius: 30px;
   background: linear-gradient(#63bcf0 0%, #4aa8e8 52%, #6cbf3f 52%, #7cc94a 100%);
   box-shadow: 0 12px 40px rgba(20, 60, 90, 0.28);
 }
 
-/* 주소창이 숨었다 나오는 모바일 브라우저에서는 100vh가 가장 큰 높이라 손해를 본다.
-   dvh를 아는 브라우저만 지금 보이는 높이로 다시 계산한다. */
-@supports (height: 100dvh) {
-  #world {
-    --fit-w: calc((100dvh - var(--chrome-h)) * 4 / 3 + var(--pad-x) * 2);
-  }
-}
-
-/* 세로가 매우 짧으면(가로로 눋은 태블릿·폰) 카메라 창이 먼저 줄어든다.
-   그 전에 HUD를 먼저 낮추어 얼굴에 픽셀을 더 남긴다. */
+/* 세로가 짧으면 카메라 창이 납작해진다. 그 전에 HUD를 먼저 낮춰
+   얼굴에 픽셀을 한 줄이라도 더 남긴다. */
 @media (max-height: 720px) {
   #world {
     --mascot: 34px;
@@ -78,6 +70,7 @@ body {
 
 /* --- 상단 게이지 --- */
 #hud {
+  flex: none; /* 줄어드는 쪽은 카메라 창이지 이 바가 아니다 */
   display: flex;
   align-items: center;
   gap: 10px;
@@ -109,11 +102,20 @@ body {
 }
 
 /* --- 카메라 창 ---
-   4:3으로 잘라서 얼굴을 키운다. 웹캠은 보통 16:9라 좌우가 잘린다.
+   최대 4:3으로 잘라서 얼굴을 키운다. 웹캠은 보통 16:9라 좌우가 잘린다.
    video와 canvas가 같은 intrinsic 크기 + 같은 object-fit이어야 잘리는 영역이 일치한다.
-   여기가 어긋나면 공룡 파츠가 얼굴에서 밀린다. */
+   여기가 어긋나면 공룡 파츠가 얼굴에서 밀린다.
+
+   aspect-ratio는 고정비율이 아니라 "최대 세로 길이"다. 남는 높이가 충분하면 4:3로 서 있고,
+   모자라면 flex-shrink가 세로만 깎아 더 납작한 창이 된다 — 폭은 그대로 두고
+   위아래를 더 잘라낸다. 얼굴은 화면 가운데 있으므로 이쪽이 손해가 적다.
+   min-height:0이 없으면 flex 아이템은 기본 최소 크기 때문에 줄어들지 않는다.
+   videoPointToStage()가 매 프레임 실측값으로 cover 보정을 다시 하므로,
+   비율이 변해도 칫솔·거품 좌표는 알아서 따라온다. */
 #stage {
   position: relative;
+  flex: 0 1 auto;
+  min-height: 0;
   aspect-ratio: 4 / 3;
   border-radius: 46px;
   border: 9px solid #f7e8ce;
