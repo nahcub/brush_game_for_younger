@@ -60,7 +60,8 @@ management.
   (pausing brushing pauses the lyrics too, so a kid can keep up).
 - **`src/audio.js`** — background music (`public/audio/bgm.mp3`, looped) plus the completion
   "ding", which is synthesized with WebAudio rather than shipped as a file so pitch/decay stay
-  tunable from constants. **BGM is currently disabled** — see "Background music" below.
+  tunable from constants. **BGM is on** — see "Background music" below for how to silence it
+  during development without touching the code.
 - **`src/rewards.js`** — reward box grading/items. No "nothing" outcome by design (see comments —
   this is a product/ethics constraint for a kids' product, not an oversight to "fix").
 - **`src/main.js`** — loads `FaceLandmarker` from `/wasm` + `/models` (GPU delegate, VIDEO
@@ -71,16 +72,18 @@ management.
   Also owns `QUADRANTS` — the four brush positions around the mouth (offset as a multiple of face
   width, plus x/y image flips fed to CSS as `--fx`/`--fy`). See "Telling a kid where to brush".
 
-### Background music (currently OFF)
+### Background music (ON)
 
-`BGM_ENABLED` at the top of `src/audio.js` is set to `false` because the same loop playing on every
-dev reload gets old fast. While it's `false` the mp3 isn't even given to the `<audio>` element, so
-no 1.4MB fetch happens. **Set it back to `true` before any demo or deployment** — the landing
-screen is meant to be audibly "on" so a passing kid stops walking.
+`BGM_ENABLED` at the top of `src/audio.js` is `true` — that is the correct state for any demo or
+deployment, because the landing screen is meant to be audibly "on" so a passing kid stops walking.
+Don't flip the constant to `false` and commit it; use the query param below instead.
 
-- Permanent switch: `const BGM_ENABLED = true;` in `src/audio.js`.
-- One-off, no code change: append `?bgm=1` to the URL (`?bgm=0` forces it off). The query param
-  wins over the constant.
+- Silence it for one dev session, no code change: append `?bgm=0` to the URL (`?bgm=1` forces it
+  on). The query param wins over the constant. Use this when the same loop on every hot reload
+  gets old.
+- The constant itself: `const BGM_ENABLED = true;` in `src/audio.js`. When it is `false` the mp3
+  isn't even given to the `<audio>` element, so no 1.4MB fetch happens — but that is a local
+  convenience, not a state to ship.
 
 The completion ding is *not* covered by this flag — it's one short sound and stays on. The 🔊
 button in the HUD mutes both, and persists to `localStorage` under `brush-game.muted`.
