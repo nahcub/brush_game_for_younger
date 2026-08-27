@@ -21,7 +21,7 @@ export const STOP_DELAY_MS = 2000; // 신호가 끊겨도 이만큼은 양치 �
 const MIN_FACE = 0.06; // 얼굴이 이보다 작으면 랜드마크가 너무 흔들려서 못 믿는다
 
 // 입만 벌렸다 닫아도 위 신호는 튄다. 손이 입 근처에 와 있을 때만 "양치 중"으로 인정한다.
-export const HAND_NEAR_THRESHOLD = 0.75; // 얼굴좌표계 단위(얼굴폭 기준). 이 안이면 "가까움"
+export const HAND_NEAR_THRESHOLD = 1.1; // 얼굴좌표계 단위(얼굴폭 기준). 이 안이면 "가까움"
 export const HAND_STOP_DELAY_MS = 700; // 칫솔에 손가락이 가려져 잠깐 놓쳐도 이만큼은 "가까움" 유지
 
 // 앞니 닦을 땐 입은 거의 안 움직이고 손(칫솔)만 흔들린다.
